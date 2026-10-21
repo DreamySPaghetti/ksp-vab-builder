@@ -1,8 +1,8 @@
 {
-  "web": 2,
+  "web": 3,
   "apk": 2,
-  "sha256": "8940ac81ea52847686d6bd52cf58f90dff525925b01c66d56d566f3a877a860a",
-  "notes": "R&D tech tree, building levels, game-style look",
+  "sha256": "23e5cccde7c9526445e7efa64a7e229c91c45ebcdd4c80abdec945d77cd55ce5",
+  "notes": "Says hello on launch (update test)",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "R&D tech tree, building levels, game-style look",
   "minApk": 2

@@ -4453,6 +4453,7 @@ function start() {
   refresh({ fit: true });
 }
 start();
+toast('Hello! 👋 Builder update 3 is running.', 5000);
 // Android back button: close the top-most thing, else let the app leave
 window.__appBack = () => {
   if (!$('saveDlg').hidden) { closeSave(); return true; }
