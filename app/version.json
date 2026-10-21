@@ -1,8 +1,8 @@
 {
-  "web": 7,
+  "web": 8,
   "apk": 3,
-  "sha256": "aa349f0f0a5d5d2e61a420429f703d948800d5b78a0caf2623fdeb07221c4271",
-  "notes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
+  "sha256": "ff7c60bf22994943a48c4d560e2342a0b88b04b17b77ee9ad474c942162a932b",
+  "notes": "kOS scripting, Mun and Minmus missions",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
