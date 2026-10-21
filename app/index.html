@@ -489,7 +489,7 @@ table.tbl td.dv { color: var(--good) }
   <div class="fly-main">
     <div class="fly-view" id="flyView">
       <canvas id="flyCanvas"></canvas>
-      <div class="seg viewseg" role="group" aria-label="View"><button type="button" data-fview="follow">Rocket</button><button type="button" data-fview="map">Map</button></div>
+      <div class="seg viewseg" role="group" aria-label="View"><button type="button" data-fview="3d">3D</button><button type="button" data-fview="follow">Ascent</button><button type="button" data-fview="map">Map</button></div>
       <div class="playbar"><button class="btn small" type="button" id="flyPlay">Pause</button><span class="seg" role="group" aria-label="Time warp" id="flyWarp"><button type="button" data-warp="1">1×</button><button type="button" data-warp="5">5×</button><button type="button" data-warp="20">20×</button><button type="button" data-warp="100">100×</button></span><input type="range" id="flyScrub" min="0" max="1000" value="0" aria-label="Flight time"><span class="clock" id="flyClock">T+0:00</span></div>
     </div>
     <aside class="fly-side" id="flySide"></aside>
@@ -504,7 +504,7 @@ table.tbl td.dv { color: var(--good) }
     <div class="rnd-acts">
       <button class="btn" type="button" data-preset="start">Career start</button>
       <button class="btn" type="button" data-preset="all">Research all I can</button>
-      <button class="btn" type="button" id="btnLoadGame" title="persistent.sfs for research and buildings; ModuleManager.ConfigCache for exact part placement">Load from my game…</button>
+      <button class="btn" type="button" id="btnLoadGame" title="persistent.sfs for research and buildings; ModuleManager.ConfigCache for exact part nodes and engine curves; PartDatabase.cfg for drag cubes">Load from my game…</button>
       <input id="gameIn" type="file" multiple hidden>
     </div>
     <button class="btn primary" type="button" id="rndClose">Back to VAB</button>
@@ -2786,23 +2786,28 @@ function parseSfs(text) {
 // ModuleManager.ConfigCache (or any cfg): every PART's TechRequired, and the tech tree if present
 function parseConfig(text) {
   const st = [];
-  const partTech = {}, titles = {}, nodes = [];
-  let part = null, rd = null;
+  const partTech = {}, titles = {}, nodes = [], engCurves = {};
+  let part = null, rd = null, mod = null;
   for (const ev of cfgEvents(text)) {
     if (ev[0] === 'open') {
       const name = ev[1];
       st.push(name);
-      if (name === 'PART' && !part) part = { depth: st.length, name: null, tech: null, title: null };
+      if (name === 'PART' && !part) part = { depth: st.length, name: null, tech: null, title: null, curve: null };
+      else if (part && name === 'MODULE' && st.length === part.depth + 1) mod = { name: '', keys: null };
+      else if (part && mod && name === 'atmosphereCurve' && st.length === part.depth + 2) mod.keys = [];
       else if (name === 'RDNode' && !rd) rd = { depth: st.length, id: null, t: null, c: 0, x: 0, y: 0, par: [], any: false };
       continue;
     }
     if (ev[0] === 'close') {
-      if (part && st.length === part.depth) { if (part.name) { const n = normPart(part.name); partTech[n] = part.tech || ''; if (part.title) titles[n] = part.title; } part = null; }
+      if (part && mod && st.length === part.depth + 1) { if (/^ModuleEngines/.test(mod.name) && mod.keys && mod.keys.length && !part.curve) part.curve = mod.keys; mod = null; }
+      if (part && st.length === part.depth) { if (part.name) { const n = normPart(part.name); partTech[n] = part.tech || ''; if (part.title) titles[n] = part.title; if (part.curve) engCurves[n] = part.curve; } part = null; mod = null; }
       if (rd && st.length === rd.depth) { if (rd.id) nodes.push(rd); rd = null; }
       st.pop();
       continue;
     }
     const [, k, v] = ev;
+    if (part && mod && st.length === part.depth + 1 && k === 'name') { mod.name = v; continue; }
+    if (part && mod && mod.keys && st.length === part.depth + 2 && k === 'key') { const n = v.split(/[\s,]+/).map(Number).filter(isFinite); if (n.length >= 2) mod.keys.push(n); continue; }
     if (part && st.length === part.depth) {
       if (k === 'name' && part.name == null) part.name = v;
       else if (k === 'TechRequired' && part.tech == null) part.tech = v;
@@ -2818,7 +2823,8 @@ function parseConfig(text) {
   if (!Object.keys(partTech).length && !nodes.length) throw new Error('No parts or tech nodes found in this file.');
   // a node's title may be a localisation tag (#autoLOC_...): keep the id readable then
   for (const n of nodes) { if (!n.t || n.t.startsWith('#')) n.t = n.id.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, s => s.toUpperCase()); }
-  return { partTech, titles, tree: nodes.length >= 10 ? nodes : null };
+  for (const k in engCurves) engCurves[k].sort((a, b) => a[0] - b[0]);
+  return { partTech, titles, engCurves, tree: nodes.length >= 10 ? nodes : null };
 }
 
 const api = { setData, setTree, tree, node, newCareer, normalize, isCareer, unlockedSet, partTech, techQuality, isUnlocked, partsOf,
@@ -2832,13 +2838,79 @@ else root.VABCareer = api;
 <script>
 /* Launch simulator: flies the craft from the KSC pad into Kerbin orbit with an automatic gravity turn.
    2D (equatorial plane), point mass, stages from the builder's Δv simulation. No DOM.
-   window.VABFlight in a page, module.exports in Node. */
+   window.VABFlight in a page, module.exports in Node.
+
+   Physics follows KSP's stock model as documented by open-source mods and tools:
+   - Kerbin temperature curves and gas constants: Ren0k's Project-Atmospheric-Drag (MIT), read from the game.
+     Pressure: KSP's Kerbin curve follows the US Standard Atmosphere with altitudes scaled by 0.8015
+     (the same scaling as its temperature curve) and ends at 70 km.
+   - Drag: the stock drag-cube model (tip / surface / tail faces, Cd correction, Mach, Reynolds and overall
+     multipliers, × 0.8), as reproduced by Project-Atmospheric-Drag, Kerbal Engineer and MechJeb.
+     Cubes come from the game's PartDatabase.cfg when loaded, else from the part's shape.
+   - Engines: fixed fuel flow, Isp from the part's atmosphereCurve (ModuleManager.ConfigCache when loaded).
+   - Ascent: MechJeb's classic ascent profile (pitch = 90° − (altitude fraction)^shape × 90°). */
 (function (root) {
 'use strict';
 
-const KERBIN = { R: 600000, mu: 3.5316e12, atm: 70000, H: 5600, rho0: 1.225, omega: 2 * Math.PI / 21549.425 };
+const KERBIN = { R: 600000, mu: 3.5316e12, atm: 70000, omega: 2 * Math.PI / 21549.425, P0: 101.324996948242,
+  M: 0.0289644002914429, gamma: 1.39999997615814, Rgas: 8.31446261815324 };
 
-const atmo = h => h >= KERBIN.atm || h < -1000 ? 0 : Math.exp(-Math.max(0, h) / KERBIN.H) * Math.max(0, 1 - h / KERBIN.atm) ** 0.25;
+// KSP FloatCurve: cubic Hermite between keys [x, y, inTangent, outTangent]
+function curve(keys) {
+  return x => {
+    if (x <= keys[0][0]) return keys[0][1];
+    const n = keys.length;
+    if (x >= keys[n - 1][0]) return keys[n - 1][1];
+    let i = 1; while (keys[i][0] < x) i++;
+    const [x0, y0, , m0r = 0] = keys[i - 1], [x1, y1, m1r = 0] = keys[i];
+    const h = x1 - x0, t = (x - x0) / h, m0 = (m0r || 0) * h, m1 = (m1r || 0) * h;
+    return (2 * t ** 3 - 3 * t ** 2 + 1) * y0 + (t ** 3 - 2 * t ** 2 + t) * m0 + (-2 * t ** 3 + 3 * t ** 2) * y1 + (t ** 3 - t ** 2) * m1;
+  };
+}
+// Kerbin (Project-Atmospheric-Drag/Library/AtmoData/Kerbin)
+const TEMP = curve([[0, 288.15, 0, -0.008125], [8815.22, 216.65, -0.008096968, 0], [16050.39, 216.65, 0, 0.001242164], [25729.23, 228.65, 0.001237475, 0.003464929],
+  [37879.44, 270.65, 0.00344855, 0], [41129.24, 270.65, 0, -0.003444189], [57440.13, 214.65, -0.003422425, -0.002444589], [68797.88, 186.946, -0.002433851, 0], [70000, 186.946, 0, 0]]);
+const TEMP_SUN = curve([[0, 1, 0, 0], [8815.22, 0.3, -5.91316e-05, -5.91316e-05], [16050.39, 0, 0, 0], [25729.23, 0, 0, 0], [37879.44, 0.2, 0, 0], [57440.13, 0.2, 0, 0], [63902.72, 1, 0.0001012837, 0.0001012837], [70000, 1.2, 0, 0]]);
+// equator: latitude bias 17 K, diurnal swing 9 K (half of it on average)
+const temperature = h => TEMP(Math.max(0, h)) + TEMP_SUN(Math.max(0, h)) * (17 + 4.5);
+// US Standard Atmosphere layers (Earth altitude, base T, lapse, base pressure Pa)
+const USSA = [[0, 288.15, -0.0065, 101325], [11000, 216.65, 0, 22632.06], [20000, 216.65, 0.001, 5474.889], [32000, 228.65, 0.0028, 868.0187],
+  [47000, 270.65, 0, 110.9063], [51000, 270.65, -0.0028, 66.93887], [71000, 214.65, -0.002, 3.956420]];
+const SCALE = 8815.22 / 11000;
+function pressure(h) { // kPa
+  if (h >= KERBIN.atm) return 0;
+  const H = Math.max(0, h) / SCALE, g = 9.80665, M = 0.0289644, Rg = 8.3144598;
+  let L = USSA[0]; for (const l of USSA) if (H >= l[0]) L = l;
+  const [hb, Tb, lr, Pb] = L, dh = H - hb;
+  const P = lr === 0 ? Pb * Math.exp(-g * M * dh / (Rg * Tb)) : Pb * Math.pow(Tb / (Tb + lr * dh), g * M / (Rg * lr));
+  return P / 1000 * (KERBIN.P0 / 101.325);
+}
+function air(h) {
+  const P = pressure(h), T = temperature(h);
+  const rho = P > 0 ? P * 1000 * KERBIN.M / (KERBIN.Rgas * T) : 0;
+  const a = Math.sqrt(KERBIN.gamma * KERBIN.Rgas / KERBIN.M * T);
+  return { P, atm: P / 101.325, T, rho, a };
+}
+const atmo = h => pressure(h) / 101.325; // kept for older callers
+
+// stock drag correction curves (Project-Atmospheric-Drag, from Physics.cfg)
+const CD_INIT = curve([[0, 0, 0, 0], [0.05, 0.0025, 0.15, 0.15], [0.4, 0.15, 0.3963967, 0.3963967], [0.7, 0.35, 0.9066986, 0.9066986], [0.75, 0.45, 3.213604, 3.213604], [0.8, 0.66, 3.49833, 3.49833], [0.85, 0.8, 2.212924, 2.212924], [0.9, 0.89, 1.1, 1.1], [1, 1, 1, 1]]);
+const MACH_CD = curve([[0, 1, 0, 0.00715953], [0.85, 1.25, 0.7780356, 0.7780356], [1.1, 2.5, 0.2492796, 0.2492796], [5, 3, 0, 0]]);
+const REYNOLDS = curve([[0, 4, 0, -2975.412], [0.0001, 3, -251.1479, -251.1479], [0.01, 2, -19.63584, -19.63584], [0.1, 1.2, -0.7846036, -0.7846036], [1, 1, 0, 0], [100, 1, 0, 0], [200, 0.82, 0, 0], [500, 0.86, 0.0001932119, 0.0001932119], [1000, 0.9, 1.54299e-05, 1.54299e-05], [10000, 0.95, 0, 0]]);
+const OVERALL = curve([[0, 0.5, 0, 0], [0.85, 0.5, 0, 0], [1.1, 1.3, 0, -0.008100224], [2, 0.7, -0.1104858, -0.1104858], [5, 0.6, 0, 0], [10, 0.85, 0.02198264, 0.02198264], [14, 0.9, 0.007694946, 0.007694946], [25, 0.95, 0, 0]]);
+const TIP = curve([[0, 1, 0, 0], [0.85, 1.19, 0.6960422, 0.6960422], [1.1, 2.83, 0.730473, 0.730473], [5, 4, 0, 0]]);
+const SURF = curve([[0, 0.02, 0, 0], [0.85, 0.02, 0, 0], [0.9, 0.0152439, -0.07942077, -0.07942077], [1.1, 0.0025, -0.005279571, -0.001936768], [2, 0.002083333, -2.314833e-05, -2.314833e-05], [5, 0.003333333, -0.000180556, -0.000180556], [25, 0.001428571, -7.14286e-05, 0]]);
+const TAIL = curve([[0, 1, 0, 0], [0.85, 1, 0, 0], [1.1, 0.25, -0.02215106, -0.02487721], [1.4, 0.22, -0.03391732, -0.03391732], [5, 0.15, -0.001198566, -0.001198566], [25, 0.14, 0, 0]]);
+
+// drag (kN) for faces [{A, cd, k}] flying nose-first
+function dragForce(faces, rho, v, mach) {
+  if (!rho || !v || !faces.length) return 0;
+  const mm = MACH_CD(mach);
+  let tip = 0, surf = 0, tail = 0;
+  for (const f of faces) { const c = Math.pow(CD_INIT(Math.min(1, Math.max(0, f.cd))), mm) * f.A; if (f.k === 'tip') tip += c; else if (f.k === 'tail') tail += c; else surf += c; }
+  const acd = (tip * TIP(mach) + surf * SURF(mach) + tail * TAIL(mach)) * OVERALL(mach) * REYNOLDS(rho * v);
+  return 0.5 * rho * v * v * acd * 0.8 / 1000;
+}
 
 // orbit shape from a state vector
 function orbit(x, y, vx, vy) {
@@ -2850,25 +2922,79 @@ function orbit(x, y, vx, vy) {
   return { a, e, ap, pe, h };
 }
 
-/* opts: { target: m (orbit altitude, default 80 km), turnEnd: m (altitude where the turn reaches horizontal, default 45 km),
-           shape (pitch curve exponent, default .55), width: m (craft width, for drag), cd (default .45), maxTime: s }
+// ---------------------------------------------------------------------------
+// Aero model of the craft: drag-cube faces per burning stage (parts still attached), stack faces occluded
+// cubes: { partName: [[A,d], ×6 in XP, XN, YP, YN, ZP, ZN order] } from PartDatabase.cfg, optional
+// ---------------------------------------------------------------------------
+function shapeCube(d, V) {
+  const dd = d.d || 0.5, [y0, y1] = V.isAxial(d) ? V.nodeExtent(d) : [-(d.h || 0.5) / 2, (d.h || 0.5) / 2], h = Math.max(0.05, y1 - y0);
+  if (!V.isAxial(d)) { const a = Math.min(dd * h, 2) * 0.25; return [[a, 0.6], [a, 0.6], [a * 0.3, 0.5], [a * 0.3, 0.5], [a, 0.6], [a, 0.6]]; }
+  const end = Math.PI * dd * dd / 4, side = dd * h * 0.8;
+  const top = d.sh === 'nose' ? 0.3 : d.sh === 'pod' ? 0.55 : d.sh === 'chute' ? 0.7 : 0.95;
+  const bot = d.sh === 'eng' || d.sh === 'srb' ? 0.75 : 0.95;
+  return [[side, 0.7], [side, 0.7], [end, top], [end, bot], [side, 0.7], [side, 0.7]];
+}
+function buildAero(state, sim, V, cubes) {
+  const ix = V.index(state), out = new Map();
+  const cubeOf = p => { const d = V.def(p); if (!d) return null; const c = cubes && cubes[p.n]; return c ? c.map(f => f.slice()) : shapeCube(d, V); };
+  const face = n => /^top/.test(n || '') ? 2 : /^bottom/.test(n || '') ? 3 : -1;
+  for (const s of sim.stages) {
+    const att = state.parts.filter(p => sim.drop.get(p.id) < s.stage && !V.isClamp(p, V.def(p)));
+    const set = new Set(att.map(p => p.id)), cs = new Map(att.map(p => [p.id, cubeOf(p)]));
+    for (const p of att) {
+      if (p.parent == null || !set.has(p.parent) || !p.att || p.att.t !== 'stack') continue;
+      const a = cs.get(p.id), b = cs.get(p.parent); if (!a || !b) continue;
+      const fa = face(p.att.my), fb = face(p.att.par); if (fa < 0 || fb < 0) continue;
+      const shared = Math.min(a[fa][0], b[fb][0]);
+      a[fa][0] -= shared; b[fb][0] -= shared;
+    }
+    const faces = [];
+    for (const c of cs.values()) {
+      if (!c) continue;
+      faces.push({ A: c[2][0], cd: c[2][1], k: 'tip' }, { A: c[3][0], cd: c[3][1], k: 'tail' });
+      for (const i of [0, 1, 4, 5]) faces.push({ A: c[i][0], cd: c[i][1], k: 'side' });
+    }
+    out.set(s.stage, faces.filter(f => f.A > 1e-4));
+  }
+  return out;
+}
+// engines per stage: vacuum thrust (with limiter) and Isp against pressure
+function buildEngines(state, sim, V, curves) {
+  const out = new Map(), byId = new Map(state.parts.map(p => [p.id, p]));
+  for (const s of sim.stages) {
+    const list = [];
+    for (const id of s.engines || []) {
+      const p = byId.get(id), d = V.def(p); if (!d || !d.eng) continue;
+      const k = (p.lim != null ? p.lim : 100) / 100, c = curves && curves[p.n];
+      const isp = c && c.length ? curve(c) : (pa => d.eng.v + (d.eng.a - d.eng.v) * pa);
+      list.push({ id, t: d.eng.t * k, ispV: c && c.length ? curve(c)(0) : d.eng.v, isp });
+    }
+    out.set(s.stage, list);
+  }
+  return out;
+}
+
+/* opts: { target: m, turnEnd: m (turn reaches horizontal), shape (MechJeb turn shape exponent, .4),
+           aero: Map from buildAero, engines: Map from buildEngines, maxTime: s }
    sim: the builder's V.simulate result */
 function fly(sim, opts) {
-  opts = Object.assign({ target: 80000, turnEnd: 45000, shape: 0.55, width: 1.25, cd: 0.45, maxTime: 2400, dt: 0.05 }, opts || {});
+  opts = Object.assign({ target: 80000, turnEnd: 45000, shape: 0.4, turnStartAlt: 250, turnStartV: 50, maxTime: 2400, dt: 0.05 }, opts || {});
   const stages = sim.stages.filter(s => s.dvVac > 0 && !s.hold && s.time > 0).map(s => ({
-    stage: s.stage, m0: s.m0, m1: s.m1, burn: s.time, tVac: s.tVac, tAsl: s.tAsl, mdot: (s.m0 - s.m1) / s.time, dvVac: s.dvVac }));
+    stage: s.stage, m0: s.m0, m1: s.m1, burn: s.time, tVac: s.tVac, tAsl: s.tAsl, mdot: (s.m0 - s.m1) / s.time, dvVac: s.dvVac,
+    eng: opts.engines && opts.engines.get(s.stage), faces: opts.aero ? opts.aero.get(s.stage) || [] : null }));
   const out = { samples: [], events: [], result: null, stages, opts };
   const ev = (t, kind, msg) => out.events.push({ t, kind, msg });
   if (!stages.length) { out.result = { ok: false, code: 'NO_ENGINES', msg: 'No burning stage: nothing to launch with.' }; return out; }
   const R = KERBIN.R, mu = KERBIN.mu;
-  const area = opts.area || Math.PI * (Math.max(0.6, opts.width) / 2) ** 2;
-  let si = 0, st = stages[0], m = st.m0, used = 0; // used: seconds burned in the current stage
+  const fallbackFaces = [{ A: Math.PI * 0.39, cd: 0.95, k: 'tip' }];
+  let si = 0, st = stages[0], m = st.m0, used = 0;
   let x = 0, y = R, vx = KERBIN.omega * R, vy = 0, t = 0;
-  let phase = 'ascent', throttle = 1, maxQ = 0, maxQAlt = 0, maxG = 0, lifted = false, maxAlt = 0;
+  let phase = 'ascent', throttle = 1, maxQ = 0, maxQAlt = 0, maxG = 0, lifted = false, maxAlt = 0, maxMach = 0;
   const g0 = mu / (R * R);
-  const tAt = (s, p) => s.tAsl + (s.tVac - s.tAsl) * (1 - Math.min(1, p));
-  if (tAt(st, 1) < m * g0) {
-    out.result = { ok: false, code: 'NO_LIFTOFF', msg: `Launch thrust ${tAt(st, 1).toFixed(0)} kN can't lift ${m.toFixed(1)} t (needs over ${(m * g0).toFixed(0)} kN). TWR ${(tAt(st, 1) / (m * g0)).toFixed(2)}.` };
+  const tAt = (s, pa) => s.eng && s.eng.length ? s.eng.reduce((a, e) => a + e.t * e.isp(pa) / e.ispV, 0) : s.tAsl + (s.tVac - s.tAsl) * (1 - Math.min(1, pa));
+  const p0 = air(0).atm;
+  if (tAt(st, p0) < m * g0) {
+    out.result = { ok: false, code: 'NO_LIFTOFF', msg: `Launch thrust ${tAt(st, p0).toFixed(0)} kN can't lift ${m.toFixed(1)} t (needs over ${(m * g0).toFixed(0)} kN). TWR ${(tAt(st, p0) / (m * g0)).toFixed(2)}.` };
     ev(0, 'fail', out.result.msg); return out;
   }
   ev(0, 'go', `Liftoff on stage ${st.stage}`);
@@ -2878,29 +3004,25 @@ function fly(sim, opts) {
     for (let k = si + 1; k < stages.length; k++) d += stages[k].dvVac;
     return d;
   };
-  let lastSample = -1, lastStageMsg = '';
+  let lastSample = -1, lastFaces = st.faces;
   const dt = opts.dt;
   while (t < opts.maxTime) {
     const r = Math.hypot(x, y), alt = r - R;
-    const ux = x / r, uy = y / r, exx = uy, exy = -ux; // up, east
-    const p = atmo(alt), rho = KERBIN.rho0 * p;
-    // velocity relative to the rotating air
-    const sx = vx - KERBIN.omega * y, sy = vy + KERBIN.omega * x; // the planet turns clockwise in this frame (east = +x at the pad)
-    const sv = Math.hypot(sx, sy);
-    const q = 0.5 * rho * sv * sv;
+    const ux = x / r, uy = y / r, exx = uy, exy = -ux;
+    const A = air(alt);
+    const sx = vx - KERBIN.omega * y, sy = vy + KERBIN.omega * x; // velocity through the air (planet turns clockwise here)
+    const sv = Math.hypot(sx, sy), mach = A.a > 0 ? sv / A.a : 0;
+    const q = 0.5 * A.rho * sv * sv;
     const o = orbit(x, y, vx, vy);
     const vr = vx * ux + vy * uy, vh = vx * exx + vy * exy;
     const gl = mu / (r * r);
-    // guidance
     let pitch = 90;
     if (phase === 'ascent') {
-      if (alt > 250 && sv > 40) pitch = Math.max(0, 90 * (1 - Math.min(1, (alt - 250) / (opts.turnEnd - 250)) ** opts.shape));
-      // don't pitch far below the surface prograde (keeps it stable)
+      if (alt > opts.turnStartAlt && sv > opts.turnStartV) pitch = Math.max(0, 90 - 90 * Math.min(1, (alt - opts.turnStartAlt) / (opts.turnEnd - opts.turnStartAlt)) ** opts.shape);
       const pro = Math.atan2(sx * ux + sy * uy, sx * exx + sy * exy) * 180 / Math.PI;
       if (alt > 1000 && pitch < pro - 8 && alt < KERBIN.atm) pitch = pro - 8;
-      // weak upper stages: pitch up enough to keep climbing while they build speed
       if (alt > 15000 && st) {
-        const acc = tAt(st, p) / m, gEff = gl - vh * vh / r;
+        const acc = tAt(st, A.atm) / m, gEff = gl - vh * vh / r;
         const vrDes = Math.min(gEff * 20, Math.max(0, (opts.target - alt) / 25));
         const sinP = (gEff + 0.08 * (vrDes - vr)) / Math.max(acc, 1e-6);
         if (sinP > 0) pitch = Math.max(pitch, Math.min(50, Math.asin(Math.min(1, sinP)) * 180 / Math.PI));
@@ -2908,66 +3030,64 @@ function fly(sim, opts) {
       throttle = 1;
       if (o.ap >= opts.target) { phase = 'coast'; throttle = 0; ev(t, 'meco', `Engine cut-off: apoapsis ${(o.ap / 1000).toFixed(1)} km`); }
     } else if (phase === 'coast') {
-      throttle = 0;
-      if (alt < KERBIN.atm && o.ap < opts.target - 500) { throttle = 1; pitch = 0; } // drag stole some apoapsis
+      throttle = 0; pitch = Math.atan2(vr, vh) * 180 / Math.PI;
+      if (alt < KERBIN.atm && o.ap < opts.target - 500) { throttle = 1; pitch = 0; }
       const vcirc = Math.sqrt(mu / (R + Math.max(o.ap, 0)));
       const need = Math.max(0, vcirc - Math.abs(vh) * r / (R + o.ap));
-      const acc = st ? tAt(st, p) / m : 0;
+      const acc = st ? tAt(st, A.atm) / m : 0;
       const tAp = vr > 0 ? vr / gl : 0;
       if (alt >= KERBIN.atm - 500 && acc > 0 && tAp <= need / acc / 2 + 1) { phase = 'circ'; ev(t, 'circ', `Circularisation burn: ${need.toFixed(0)} m/s needed`); }
       if (vr < 0 && alt < KERBIN.atm - 500 && o.pe < KERBIN.atm) { phase = 'circ'; ev(t, 'circ', 'Past apoapsis inside the atmosphere: burning to save it'); }
     }
     if (phase === 'circ') {
       throttle = 1;
-      // hold the horizon: tilt up just enough to cancel what gravity is left after orbital speed, and to null vertical speed
-      const acc = st ? tAt(st, p) / m : 0, gEff = gl - vh * vh / r;
-      const sinP = acc > 0 ? (gEff - 0.08 * vr) / acc : 0;
-      pitch = Math.max(-15, Math.min(75, Math.asin(Math.max(-1, Math.min(1, sinP))) * 180 / Math.PI));
-      if (o.pe >= Math.min(opts.target - 2000, o.ap - 2000) && o.pe > KERBIN.atm) { throttle = 0; phase = 'orbit'; ev(t, 'orbit', `Orbit: ${(o.ap / 1000).toFixed(1)} × ${(o.pe / 1000).toFixed(1)} km`); }
+      // steer toward circular velocity at the current height (plus gravity loss while vertical speed is off)
+      const acc = st ? tAt(st, A.atm) / m : 0, gEff = gl - vh * vh / r;
+      const dE = Math.sqrt(mu / r) - vh, dU = -vr + gEff * Math.min(20, dE / Math.max(acc, 1e-3));
+      pitch = Math.max(-30, Math.min(75, Math.atan2(dU, Math.max(dE, 1e-3)) * 180 / Math.PI));
+      if ((o.pe >= Math.min(opts.target - 2000, o.ap - 2000) || dE < 1) && o.pe > KERBIN.atm) { throttle = 0; phase = 'orbit'; ev(t, 'orbit', `Orbit: ${(o.ap / 1000).toFixed(1)} × ${(o.pe / 1000).toFixed(1)} km`); }
     }
     if (!st) throttle = 0;
-    // forces
-    const T = throttle * (st ? tAt(st, p) : 0);
+    const T = throttle * (st ? tAt(st, A.atm) : 0);
     const pr = pitch * Math.PI / 180;
     const dx = Math.cos(pr) * exx + Math.sin(pr) * ux, dy = Math.cos(pr) * exy + Math.sin(pr) * uy;
     let ax = T * dx / m - gl * ux, ay = T * dy / m - gl * uy;
-    if (sv > 0.1 && rho > 0) { const D = opts.cd * area * q / 1000; ax -= D * sx / sv / m; ay -= D * sy / sv / m; }
-    // on the pad until thrust beats gravity
+    const faces = st ? st.faces || fallbackFaces : lastFaces || fallbackFaces;
+    const Dn = sv > 0.1 ? dragForce(faces, A.rho, sv, mach) : 0;
+    if (Dn > 0) { ax -= Dn * sx / sv / m; ay -= Dn * sy / sv / m; }
     if (!lifted) { if (T / m > gl) lifted = true; else { ax = 0; ay = 0; } }
     const gforce = Math.hypot(ax + gl * ux, ay + gl * uy) / 9.81;
-    maxG = Math.max(maxG, gforce);
+    maxG = Math.max(maxG, gforce); if (A.rho > 0) maxMach = Math.max(maxMach, mach);
     if (q > maxQ) { maxQ = q; maxQAlt = alt; }
     maxAlt = Math.max(maxAlt, alt);
-    if (t - lastSample >= 0.5 || lastSample < 0) {
-      out.samples.push({ t, x, y, alt, sv, ov: Math.hypot(vx, vy), ap: o.ap, pe: o.pe, pitch, thr: throttle, stage: st ? st.stage : null, m, q, g: gforce, dv: dvLeft(), phase });
+    if (t - lastSample >= 0.25 || lastSample < 0) {
+      out.samples.push({ t, x, y, alt, sv, ov: Math.hypot(vx, vy), ap: o.ap, pe: o.pe, pitch, thr: throttle, stage: st ? st.stage : null, m, q, g: gforce, dv: dvLeft(), phase, mach, drag: Dn });
       lastSample = t;
     }
     if (phase === 'orbit') break;
-    // integrate (semi-implicit Euler)
     vx += ax * dt; vy += ay * dt; x += vx * dt; y += vy * dt; t += dt;
     if (st && throttle > 0) {
       const burn = Math.min(dt * throttle, st.burn - used);
       used += burn; m -= st.mdot * burn;
       if (used >= st.burn - 1e-9) {
-        const prev = st; si++; st = stages[si] || null; used = 0;
+        const prev = st; si++; st = stages[si] || null; used = 0; lastFaces = prev.faces;
         if (st) { m = st.m0; ev(t, 'stage', `Stage ${prev.stage} burned out; stage ${st.stage} ignites (${(alt / 1000).toFixed(1)} km)`); }
         else { m = prev.m1; ev(t, 'dry', `Out of fuel at ${(alt / 1000).toFixed(1)} km, ${Math.hypot(vx, vy).toFixed(0)} m/s`); }
       }
     }
     if (lifted && Math.hypot(x, y) < R) {
-      ev(t, 'crash', `Hit the ground ${((t)).toFixed(0)} s after launch`);
+      ev(t, 'crash', `Hit the ground ${t.toFixed(0)} s after launch`);
       out.result = { ok: false, code: 'CRASH', msg: maxAlt >= KERBIN.atm ? `Suborbital: reached space (${(maxAlt / 1000).toFixed(1)} km) but fell back.` : `Fell back after reaching ${(maxAlt / 1000).toFixed(1)} km.`, maxAlt };
       break;
     }
     if (!st && phase !== 'orbit') {
-      // coast out the rest: is it an orbit?
       const oo = orbit(x, y, vx, vy);
       if (oo.pe > KERBIN.atm) { phase = 'orbit'; ev(t, 'orbit', `Orbit: ${(oo.ap / 1000).toFixed(1)} × ${(oo.pe / 1000).toFixed(1)} km`); }
     }
   }
   const o = orbit(x, y, vx, vy), r = Math.hypot(x, y);
-  out.samples.push({ t, x, y, alt: r - R, sv: 0, ov: Math.hypot(vx, vy), ap: o.ap, pe: o.pe, pitch: 0, thr: 0, stage: st ? st.stage : null, m, q: 0, g: 0, dv: dvLeft(), phase });
-  out.final = { ap: o.ap, pe: o.pe, e: o.e, a: o.a, t, dvLeft: dvLeft(), maxQ, maxQAlt, maxG, maxAlt };
+  out.samples.push({ t, x, y, alt: r - R, sv: 0, ov: Math.hypot(vx, vy), ap: o.ap, pe: o.pe, pitch: Math.atan2(vx * y / r - vy * x / r, 0) * 0, thr: 0, stage: st ? st.stage : null, m, q: 0, g: 0, dv: dvLeft(), phase, mach: 0, drag: 0 });
+  out.final = { ap: o.ap, pe: o.pe, e: o.e, a: o.a, t, dvLeft: dvLeft(), maxQ, maxQAlt, maxG, maxAlt, maxMach };
   if (!out.result) {
     if (phase === 'orbit') out.result = { ok: true, code: 'ORBIT', msg: `Orbit reached: ${(o.ap / 1000).toFixed(1)} × ${(o.pe / 1000).toFixed(1)} km with ${dvLeft().toFixed(0)} m/s left.` };
     else if (o.pe > KERBIN.atm) out.result = { ok: true, code: 'ORBIT', msg: `Orbit: ${(o.ap / 1000).toFixed(1)} × ${(o.pe / 1000).toFixed(1)} km.` };
@@ -2976,19 +3096,36 @@ function fly(sim, opts) {
   return out;
 }
 
-// frontal area: the widest stack part, plus each side booster (surface-attached stack parts)
+// frontal area estimate (kept for older callers)
 function frontalArea(state, V) {
   let dmax = 0, extra = 0;
   for (const p of state.parts) {
     const d = V.def(p); if (!d || !d.d || V.isClamp(p, d)) continue;
-    if (V.isAxial(d)) {
-      if (p.att && p.att.t === 'srf') extra += Math.PI * (d.d / 2) ** 2; else dmax = Math.max(dmax, d.d);
-    }
+    if (V.isAxial(d)) { if (p.att && p.att.t === 'srf') extra += Math.PI * (d.d / 2) ** 2; else dmax = Math.max(dmax, d.d); }
   }
   return Math.PI * (Math.max(0.6, dmax) / 2) ** 2 + extra;
 }
 
-const api = { fly, orbit, atmo, frontalArea, KERBIN };
+// PartDatabase.cfg: DRAG_CUBE "cube = Default, a,d,depth ×6, center, size" per part url
+function parsePartDatabase(text) {
+  const cubes = {}; let url = null, n = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    const m = line.match(/^url\s*=\s*(.+)$/);
+    if (m) { url = m[1].trim(); continue; }
+    const c = line.match(/^cube\s*=\s*([^,]*),(.*)$/);
+    if (c && url) {
+      if (c[1].trim() && !/^default$/i.test(c[1].trim()) && cubes[name(url)]) continue; // first/Default cube only
+      const v = c[2].split(',').map(Number);
+      if (v.length >= 18 && v.slice(0, 18).every(isFinite)) { const f = []; for (let i = 0; i < 6; i++) f.push([v[i * 3], v[i * 3 + 1]]); cubes[name(url)] = f; n++; }
+    }
+  }
+  function name(u) { return u.split('/').pop().replace(/_/g, '.'); }
+  if (!n) throw new Error('No drag cubes found. Pick PartDatabase.cfg from your KSP folder.');
+  return cubes;
+}
+
+const api = { fly, orbit, atmo, air, pressure, temperature, dragForce, buildAero, buildEngines, frontalArea, parsePartDatabase, curve, KERBIN };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.VABFlight = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -3488,6 +3625,9 @@ let S = V.newCraft();
 const ui = { mode: 'idle', held: null, line: null, cand: null, why: '', sel: null, hover: null, hoverIds: new Set(), sym: 1, snap: true, com: true, colors: 'real', env: true, pending: false, sheet: null,
   mission: 'orbit', payload: false, tab: 'staging', src: 'All', cat: 'All', q: '', infoPart: null, dvSit: 'flight', node: null, flyTarget: '80000', flyTurn: '45000' };
 let CAREER = C.newCareer();
+const LS_PHYS = 'kspvab.phys.v1';
+const PHYS = { cubes: null };
+try { const ph = JSON.parse(localStorage.getItem(LS_PHYS) || 'null'); if (ph && ph.cubes) PHYS.cubes = ph.cubes; } catch (e) { /* none stored */ }
 let D = { staging: null, sim: null, bal: null, checks: [], dims: [0, 0, 0] };
 const hist = { undo: [], redo: [] };
 const byId = id => S.parts.find(p => p.id === id);
@@ -4499,12 +4639,15 @@ function closeRnd() { $('rnd').hidden = true; }
 // Launch simulator: precompute the whole flight, then play it back like the game's map view
 // ---------------------------------------------------------------------------
 const FL = window.VABFlight, KR = FL.KERBIN;
-const FV = { run: null, t: 0, warp: 5, playing: true, view: 'follow', last: 0, raf: 0, stars: null };
+const FV = { run: null, t: 0, warp: 5, playing: true, view: '3d', last: 0, raf: 0, stars: null };
 const fmtClock = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s2 = Math.floor(t % 60); return `T+${m}:${String(s2).padStart(2, '0')}`; };
 const fmtAlt = h => !isFinite(h) ? '—' : Math.abs(h) >= 1e6 ? fmt(h / 1e6, 2) + ' Mm' : Math.abs(h) >= 1e4 ? fmt(h / 1000, 1) + ' km' : fmt(h, 0) + ' m';
 function flyCompute() {
   if (!S.parts.length) return null;
-  return FL.fly(D.sim, { target: +ui.flyTarget, turnEnd: +ui.flyTurn, area: FL.frontalArea(S, V) });
+  const cubes = PHYS.cubes, curves = CAREER.engCurves || null;
+  const run = FL.fly(D.sim, { target: +ui.flyTarget, turnEnd: +ui.flyTurn, aero: FL.buildAero(S, D.sim, V, cubes), engines: FL.buildEngines(S, D.sim, V, curves) });
+  run.src = { cubes: !!cubes, curves: !!curves };
+  return run;
 }
 function openFly() {
   if (!S.parts.length) { toast('Add some parts first.'); return; }
@@ -4513,10 +4656,11 @@ function openFly() {
   $('fly').hidden = false;
   $('flyTitle').textContent = 'Flight: ' + S.name;
   $('flyTarget').value = ui.flyTarget; $('flyTurn').value = ui.flyTurn;
+  $('flyCanvas').hidden = FV.view === '3d'; if (F3.r) F3.r.domElement.hidden = FV.view !== '3d';
   relaunch();
 }
 function relaunch() {
-  FV.run = flyCompute(); FV.t = 0; FV.playing = true; FV.last = performance.now();
+  FV.run = flyCompute(); F3.dirty = true; FV.t = 0; FV.playing = true; FV.last = performance.now();
   renderFlySide(); syncFlyControls();
   cancelAnimationFrame(FV.raf); FV.raf = requestAnimationFrame(flyLoop);
 }
@@ -4530,7 +4674,7 @@ function sampleAt(t) {
   if (t <= S2[0].t) return vel(S2[0], S2[1]); if (t >= S2[hi].t) return vel(S2[hi - 1], S2[hi]);
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (S2[mid].t <= t) lo = mid; else hi = mid; }
   const a = S2[lo], b = S2[hi], f = (t - a.t) / Math.max(1e-6, b.t - a.t), o = {};
-  for (const k in a) o[k] = typeof a[k] === 'number' && typeof b[k] === 'number' ? a[k] + (b[k] - a[k]) * f : a[k];
+  for (const k in a) o[k] = typeof a[k] === 'number' && typeof b[k] === 'number' && k !== 'stage' ? a[k] + (b[k] - a[k]) * f : a[k];
   // orbit shape needs a true state: velocity from neighbouring samples
   o.vx = (b.x - a.x) / Math.max(1e-6, b.t - a.t); o.vy = (b.y - a.y) / Math.max(1e-6, b.t - a.t);
   return o;
@@ -4546,7 +4690,8 @@ function flyLoop(now) {
     FV.t = Math.min(flyEnd(), FV.t + dt * FV.warp);
     if (FV.t >= flyEnd()) { FV.playing = false; syncFlyControls(); }
   }
-  drawFly(); updateFlyTele();
+  if (FV.view === '3d') draw3d(); else drawFly();
+  updateFlyTele();
   if (!$('fly').hidden) FV.raf = requestAnimationFrame(flyLoop);
 }
 function renderFlySide() {
@@ -4563,7 +4708,7 @@ function renderFlySide() {
     <div class="tele" id="flyTele"></div>
     ${fin.maxQ != null ? `<p class="note" style="margin:0">Max Q ${fmt(fin.maxQ / 1000, 1)} kPa at ${fmtAlt(fin.maxQAlt)} · peak ${fmt(fin.maxG, 1)} g · ${fmt(fin.t)} s to the end</p>` : ''}
     <div class="evwrap"><h3 style="margin:0 0 6px">Flight log</h3><ul class="evlist" id="flyEvents">${r.events.map(e => `<li data-t="${e.t}"><span class="tt">${fmtClock(e.t)}</span><span>${esc(e.msg)}</span></li>`).join('')}</ul></div>
-    <p class="note" style="margin:0">Autopilot: straight up, then a gravity turn that's horizontal by the chosen altitude, coast to apoapsis and circularise. Kerbin's rotation, atmosphere, drag and staging are modelled; it's a quick 2D estimate, so fly it in game before trusting it with crew.</p>`;
+    <p class="note" style="margin:0">Physics: KSP's stock drag-cube model and Kerbin atmosphere (as rebuilt by the open-source Project-Atmospheric-Drag, Kerbal Engineer and MechJeb), Kerbin's rotation and staging. Drag cubes ${r.src && r.src.cubes ? 'from your PartDatabase.cfg' : 'estimated from part shapes (load PartDatabase.cfg in R&amp;D for exact ones)'}; engine Isp ${r.src && r.src.curves ? 'from your ModuleManager.ConfigCache' : 'between sea-level and vacuum figures (load ModuleManager.ConfigCache for exact curves)'}. Autopilot: MechJeb-style classic ascent, coast, circularise. Flight is 2D with the craft pointing where it thrusts, so it's an estimate; fly it in game before trusting it with crew.</p>`;
 }
 function updateFlyTele() {
   if (!FV.run || $('fly').hidden) return;
@@ -4649,12 +4794,188 @@ function drawFly() {
   // altitude scale in follow view
   if (FV.view === 'follow') { g.fillStyle = 'rgba(231,235,238,.75)'; g.font = '500 12px ' + getComputedStyle(document.body).fontFamily; g.fillText(fmtAlt(s.alt), rx + 14, ry + 4); }
 }
+// ---- 3D view: the craft's own models over a 3D Kerbin; the world turns so "up" stays up on screen
+const F3 = { r: null, dirty: true };
+function f3Init() {
+  if (F3.r) return true;
+  try { F3.r = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true }); } catch (e) { return false; }
+  F3.r.setPixelRatio(Math.min(COARSE ? 1.5 : 2, window.devicePixelRatio || 1)); F3.r.outputEncoding = THREE.sRGBEncoding;
+  $('flyView').prepend(F3.r.domElement); F3.r.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
+  F3.scene = new THREE.Scene();
+  F3.cam = new THREE.PerspectiveCamera(50, 1, 0.3, 4e7);
+  F3.controls = new THREE.OrbitControls(F3.cam, F3.r.domElement); F3.controls.enableDamping = true; F3.controls.dampingFactor = .12; F3.controls.enablePan = false;
+  F3.scene.add(new THREE.HemisphereLight(0xdfeaff, 0x3a4048, .65));
+  const sunL = new THREE.DirectionalLight(0xfff4e0, 1.05); sunL.position.set(.5, 1, .35); F3.scene.add(sunL);
+  // stars
+  const sg = new THREE.BufferGeometry(), sp = [];
+  for (let i = 0; i < 1500; i++) { const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = 3e7; sp.push(r * Math.sqrt(1 - u * u) * Math.cos(a), r * u, r * Math.sqrt(1 - u * u) * Math.sin(a)); }
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+  F3.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xdfe8f2, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0 }));
+  F3.scene.add(F3.stars);
+  F3.world = new THREE.Group(); F3.scene.add(F3.world);
+  // Kerbin
+  const R = KR.R;
+  F3.inertial = new THREE.Group(); F3.world.add(F3.inertial);
+  F3.planet = new THREE.Group(); F3.inertial.add(F3.planet);
+  const tex = (() => {
+    const W = 1024, H = 512, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), img = g.createImageData(W, H);
+    const rnd = (x, y) => { const s2 = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s2 - Math.floor(s2); };
+    const noise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, sm = t => t * t * (3 - 2 * t);
+      const a = rnd(xi, yi), b = rnd(xi + 1, yi), c2 = rnd(xi, yi + 1), d = rnd(xi + 1, yi + 1); return a + (b - a) * sm(xf) + (c2 - a) * sm(yf) + (a - b - c2 + d) * sm(xf) * sm(yf); };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const lat = Math.abs(y / H - .5) * 2; let n = 0, amp = 1, f = 4;
+      for (let o = 0; o < 5; o++) { n += noise(x / W * f * 2 + o * 7.3, y / H * f + o * 3.1) * amp; amp *= .5; f *= 2; }
+      n = n / 1.9;
+      let col;
+      const land = n > .5 || (x > W * .23 && x < W * .3 && Math.abs(y / H - .5) < .04); // KSC sits on a coast near the equator
+      if (lat > .86) col = [235, 240, 245];
+      else if (land && x > W * .2 && x < W * .33 && lat < .2) col = [70, 128, 60];
+      else if (land) { const h = (n - .5) * 4; col = h > .8 ? [150, 140, 125] : h > .55 ? [110, 120, 70] : [74, 128, 62]; }
+      else { const d = Math.max(0, .5 - n) * 2; col = [26 - d * 10, 74 - d * 30, 140 - d * 40]; }
+      const i = (y * W + x) * 4; img.data[i] = col[0]; img.data[i + 1] = col[1]; img.data[i + 2] = col[2]; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
+  })();
+  const sphere = new THREE.Mesh(new THREE.SphereGeometry(R - 60, 160, 96), new THREE.MeshStandardMaterial({ map: tex, roughness: .95, metalness: 0 }));
+  // texture longitude 0.265 at the pad (on the +Y axis of the planet)
+  sphere.rotation.z = 0; sphere.rotation.y = 0; sphere.rotation.x = Math.PI / 2;
+  sphere.rotation.order = 'XYZ'; sphere.rotateY(-(.265 * Math.PI * 2) + Math.PI / 2);
+  F3.planet.add(sphere);
+  // atmosphere: a glow at the limb only (bright where we look through more air)
+  const haloMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'varying vec3 vN; varying vec3 vV; void main(){ float f = 1.0 - max(dot(vN, vV), 0.0); gl_FragColor = vec4(0.45, 0.7, 1.0, 1.0) * pow(f, 4.0) * 0.9; }' });
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(R + 50000, 96, 48), haloMat);
+  F3.planet.add(halo);
+  // launch site: grass, the pad and a tower
+  const site = new THREE.Group(); site.position.set(0, R, 0); F3.planet.add(site);
+  const grass = new THREE.Mesh(new THREE.CircleGeometry(5000, 64), new THREE.MeshStandardMaterial({ color: 0x4f8a3f, roughness: 1 }));
+  grass.rotation.x = -Math.PI / 2; grass.position.y = -.05; site.add(grass);
+  const concrete = new THREE.MeshStandardMaterial({ color: 0x8c9196, roughness: .9 });
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(30, 1, 30), concrete); slab.position.y = -.5; site.add(slab);
+  const steel = new THREE.MeshStandardMaterial({ color: 0x9aa3ab, roughness: .6, metalness: .5 });
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(2.5, 40, 2.5), steel); tower.position.set(-11, 20, -6); site.add(tower);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(7, .8, .8), steel); arm.position.set(-7.5, 30, -6); site.add(arm);
+  F3.site = site;
+  // flown path and predicted orbit (inertial)
+  F3.path = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xF4B63A }));
+  F3.orbit = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x4FB6F2 }));
+  F3.path.frustumCulled = F3.orbit.frustumCulled = false;
+  F3.trail = new THREE.Group(); F3.world.add(F3.trail); F3.trail.add(F3.path, F3.orbit);
+  return true;
+}
+function f3BuildCraft() {
+  if (F3.craft) { F3.scene.remove(F3.craft); F3.craft.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  if (F3.clamps) { F3.site.remove(F3.clamps); }
+  F3.craft = new THREE.Group(); F3.scene.add(F3.craft);
+  F3.clamps = new THREE.Group(); F3.site.add(F3.clamps);
+  const sim = D.sim, run = FV.run;
+  // full-craft centre of mass and its height above the ground
+  const com = sim.totals.com;
+  F3.h0 = com[1] - groundY;
+  F3.parts = [];
+  const engStage = new Map(sim.stages.map(s2 => [s2.stage, new Set(s2.engines)]));
+  F3.engStage = engStage;
+  // release time per drop stage, from the flight
+  const firstAt = st => { const q = run.samples.find(s2 => s2.stage != null && s2.stage <= st); return q ? q.t : Infinity; };
+  for (const p of S.parts) {
+    const d = V.def(p); if (!d) continue;
+    const g = new THREE.Group(); g.position.copy(T(M.sub(p.pos, com))); g.quaternion.copy(TQ(p.rot));
+    let groups; try { groups = MODELS.build(d, p, { groundY: groundY - com[1] + com[1] }); } catch (e) { groups = [[new THREE.BoxGeometry(.5, .5, .5), 'lgrey']]; }
+    for (const [geo, key] of groups) {
+      const c = MODELS.COL[key] || MODELS.COL.lgrey;
+      const m = new THREE.MeshStandardMaterial({ color: c[0], roughness: c[1], metalness: c[2], side: THREE.DoubleSide });
+      if (c[3]) { m.emissive = new THREE.Color(c[0]); m.emissiveIntensity = .7; }
+      g.add(new THREE.Mesh(geo, m));
+    }
+    const clamp = V.isClamp(p, d);
+    const drop = sim.drop.get(p.id);
+    const info = { p, d, g, drop, rel: drop >= 0 ? firstAt(drop) : Infinity, base: g.position.clone(), out: new THREE.Vector3(p.pos[0], 0, -p.pos[2]).normalize(), plume: null, spin: new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize() };
+    if (clamp) { g.position.y += F3.h0; F3.clamps.add(g); continue; } // clamps stay on the pad
+    if (V.isEngine(p, d) && d.eng && !d.eng.air) {
+      const [y0] = V.isAxial(d) ? V.nodeExtent(d) : [-(d.h || 1) / 2], r = Math.max(.12, (d.d || 1.25) * .38);
+      const pl = new THREE.Group();
+      const outer = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.9, 1, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: .38, depthWrite: false, side: THREE.DoubleSide }));
+      const inner = new THREE.Mesh(new THREE.CylinderGeometry(r * .55, r * .9, 1, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: .75, depthWrite: false, side: THREE.DoubleSide }));
+      outer.geometry.translate(0, -.5, 0); inner.geometry.translate(0, -.5, 0);
+      pl.add(outer, inner); pl.position.y = y0; pl.visible = false; g.add(pl);
+      info.plume = pl; info.r = r;
+    }
+    F3.craft.add(g); F3.parts.push(info);
+  }
+  // per-stage centre of the remaining craft, so the camera stays on it after staging
+  F3.stageCom = new Map();
+  for (const s2 of sim.stages) {
+    let m = 0, c = [0, 0, 0];
+    for (const p of S.parts) { if (!(sim.drop.get(p.id) < s2.stage) || V.isClamp(p, V.def(p))) continue; const w = V.partWet(p); m += w; c = M.add(c, M.scale(p.pos, w)); }
+    F3.stageCom.set(s2.stage, m > 0 ? T(M.sub(M.scale(c, 1 / m), com)) : new THREE.Vector3());
+  }
+  // flown path
+  const pts = run.samples.map(q => new THREE.Vector3(q.x, q.y, 0));
+  F3.path.geometry.dispose(); F3.path.geometry = new THREE.BufferGeometry().setFromPoints(pts.length > 1 ? pts : [new THREE.Vector3(), new THREE.Vector3()]);
+  F3.span = (() => { const b = new THREE.Box3().setFromObject(F3.craft); return b.isEmpty() ? 10 : Math.max(4, ...b.getSize(new THREE.Vector3()).toArray()); })();
+  F3.cam.position.set(F3.span * 1.3, F3.span * .35, F3.span * 1.5); F3.controls.target.set(0, 0, 0);
+  F3.controls.minDistance = F3.span * .4; F3.controls.maxDistance = 4e6;
+  F3.cam.lookAt(0, 0, 0); F3.controls.update();
+  F3.dirty = false;
+}
+function draw3d() {
+  if (!f3Init()) { FV.view = 'follow'; syncFlyControls(); return; }
+  const view = $('flyView'), W = view.clientWidth, H = view.clientHeight;
+  const cv = F3.r.domElement;
+  if (cv.width !== Math.round(W * F3.r.getPixelRatio()) || cv.height !== Math.round(H * F3.r.getPixelRatio())) { F3.r.setSize(W, H, false); F3.cam.aspect = W / Math.max(1, H); F3.cam.updateProjectionMatrix(); }
+  if (!FV.run || !FV.run.samples.length) return;
+  if (F3.dirty) f3BuildCraft();
+  const s2 = sampleAt(FV.t), R = KR.R, r = Math.hypot(s2.x, s2.y), ux = s2.x / r, uy = s2.y / r;
+  // world turned so local up is +Y; planet under the craft; planet spins with Kerbin
+  F3.world.rotation.z = Math.PI / 2 - Math.atan2(s2.y, s2.x);
+  F3.inertial.position.set(-(s2.x + ux * F3.h0), -(s2.y + uy * F3.h0), 0);
+  F3.planet.rotation.z = -KR.omega * FV.t;
+  F3.trail.position.set(-s2.x, -s2.y, 0);
+  // craft attitude: along its thrust (pitch from the horizon toward east)
+  const pr = (s2.pitch || 0) * Math.PI / 180;
+  F3.craft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(pr), Math.sin(pr), 0));
+  const stg = s2.stage != null ? s2.stage : (FV.run.samples.filter(q => q.stage != null).pop() || {}).stage;
+  const sc = F3.stageCom.get(stg) || new THREE.Vector3();
+  F3.craft.position.copy(sc).applyQuaternion(F3.craft.quaternion).negate();
+  const acc = (s2.g || 0) * 9.81, active = (s2.thr > 0 && F3.engStage.get(stg)) || null, air = FL.air(s2.alt);
+  for (const it of F3.parts) {
+    const tau = FV.t - it.rel;
+    if (tau < 0) { it.g.visible = true; it.g.position.copy(it.base); it.g.quaternion.copy(TQ(it.p.rot)); }
+    else if (tau < 14) { // falls away behind the accelerating craft, drifting outward and tumbling
+      it.g.visible = true;
+      it.g.position.copy(it.base).addScaledVector(new THREE.Vector3(0, -1, 0), .5 * Math.max(4, acc) * tau * tau).addScaledVector(it.out, 2.5 * tau);
+      it.g.quaternion.copy(TQ(it.p.rot)).premultiply(new THREE.Quaternion().setFromAxisAngle(it.spin, .7 * tau));
+    } else it.g.visible = false;
+    if (it.plume) {
+      const on = !!active && active.has(it.p.id) && tau < 0;
+      it.plume.visible = on;
+      if (on) { const vac = 1 - Math.min(1, air.atm), L = it.r * (4 + 9 * vac) * (.9 + Math.random() * .2); it.plume.scale.set(1 + vac * 1.6, L, 1 + vac * 1.6); }
+    }
+  }
+  // predicted orbit
+  const o = FL.orbit(s2.x, s2.y, s2.vx || 0, s2.vy || 0);
+  if (o.e < 1 && isFinite(o.a) && FV.t > 1) {
+    const mu = KR.mu, v2 = s2.vx * s2.vx + s2.vy * s2.vy, rv = s2.x * s2.vx + s2.y * s2.vy;
+    const ex = ((v2 - mu / r) * s2.x - rv * s2.vx) / mu, ey = ((v2 - mu / r) * s2.y - rv * s2.vy) / mu, w = Math.atan2(ey, ex), pts = [];
+    for (let k = 0; k <= 256; k++) { const nu = k / 256 * Math.PI * 2, rr = o.a * (1 - o.e * o.e) / (1 + o.e * Math.cos(nu)); if (rr >= R) pts.push(new THREE.Vector3(rr * Math.cos(nu + w), rr * Math.sin(nu + w), 0)); }
+    F3.orbit.geometry.dispose(); F3.orbit.geometry = new THREE.BufferGeometry().setFromPoints(pts.length > 1 ? pts : [new THREE.Vector3(), new THREE.Vector3()]); F3.orbit.visible = true;
+  } else F3.orbit.visible = false;
+  F3.path.geometry.setDrawRange(0, Math.max(2, FV.run.samples.findIndex(q => q.t > FV.t) >>> 0));
+  // sky: blue at the pad, black in space
+  const k = Math.pow(Math.min(1, air.atm), .35);
+  F3.scene.background = new THREE.Color(0x05070a).lerp(new THREE.Color(0x79aee0), k);
+  F3.stars.material.opacity = Math.max(0, 1 - k * 3);
+  F3.controls.update();
+  F3.r.render(F3.scene, F3.cam);
+}
 $('btnLaunch').onclick = openFly;
 $('flyClose').onclick = closeFly;
 $('flyAgain').onclick = relaunch;
 $('flyPlay').onclick = () => { if (!FV.playing && FV.t >= flyEnd()) FV.t = 0; FV.playing = !FV.playing; FV.last = performance.now(); syncFlyControls(); };
 document.querySelectorAll('[data-warp]').forEach(b => b.onclick = () => { FV.warp = +b.dataset.warp; syncFlyControls(); });
-document.querySelectorAll('[data-fview]').forEach(b => b.onclick = () => { FV.view = b.dataset.fview; syncFlyControls(); });
+document.querySelectorAll('[data-fview]').forEach(b => b.onclick = () => { FV.view = b.dataset.fview; syncFlyControls(); $('flyCanvas').hidden = FV.view === '3d'; if (F3.r) F3.r.domElement.hidden = FV.view !== '3d'; });
 $('flyScrub').addEventListener('input', e => { FV.t = +e.target.value / 1000 * flyEnd(); FV.playing = false; syncFlyControls(); });
 $('flyTarget').onchange = e => { ui.flyTarget = e.target.value; persist(); relaunch(); };
 $('flyTurn').onchange = e => { ui.flyTurn = e.target.value; persist(); relaunch(); };
@@ -4674,10 +4995,18 @@ $('gameIn').onchange = async e => {
     let text;
     try { text = await f.text(); } catch (err) { msgs.push(`Couldn't read ${f.name}.`); continue; }
     const isCache = /ConfigCache$/i.test(f.name) || /\bUrlConfig\b/.test(text.slice(0, 20000));
+    const isDb = /PartDatabase/i.test(f.name) || (/DRAG_CUBE/.test(text.slice(0, 200000)) && !isCache);
     try {
+      if (isDb) {
+        PHYS.cubes = window.VABFlight.parsePartDatabase(text);
+        try { localStorage.setItem(LS_PHYS, JSON.stringify({ cubes: PHYS.cubes })); } catch (e) { /* too big to keep */ }
+        msgs.push(`${f.name}: drag cubes for ${fmt(Object.keys(PHYS.cubes).length)} parts; the launch simulator now uses them.`);
+        continue;
+      }
       if (isCache || /\.cfg$/i.test(f.name)) {
         const r = C.parseConfig(text);
         CAREER.partTech = r.partTech;
+        if (r.engCurves && Object.keys(r.engCurves).length) CAREER.engCurves = r.engCurves;
         if (r.tree) { r.tree.forEach(n => { if (STOCK_TITLES.has(n.id)) n.t = STOCK_TITLES.get(n.id); }); CAREER.tree = r.tree; C.setTree(r.tree); CAREER.treeSrc = f.name; }
         const known = Object.keys(r.partTech).filter(n => DB[n]).length;
         msgs.push(`${f.name}: R&D nodes for ${fmt(Object.keys(r.partTech).length)} parts (${known} in the builder)${r.tree ? `, and your ${r.tree.length}-node tech tree` : ''}.`);
