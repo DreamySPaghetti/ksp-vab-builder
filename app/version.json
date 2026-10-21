@@ -1,8 +1,8 @@
 {
-  "web": 3,
+  "web": 4,
   "apk": 2,
-  "sha256": "23e5cccde7c9526445e7efa64a7e229c91c45ebcdd4c80abdec945d77cd55ce5",
-  "notes": "Says hello on launch (update test)",
+  "sha256": "d017baa1f7d50ce08598f1e6a32dd0e5ba8706137c2110ea14502a60ee0bc929",
+  "notes": "Launch simulator: test-fly your rocket to orbit",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "R&D tech tree, building levels, game-style look",
   "minApk": 2
