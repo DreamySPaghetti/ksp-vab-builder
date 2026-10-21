@@ -1,8 +1,8 @@
 {
-  "web": 10,
+  "web": 11,
   "apk": 3,
-  "sha256": "215b0d389d4724db6caf1eb7731ee514c0b858ccbb7afc0821be01dadf490ede",
-  "notes": "Map: orbit lines match Ap/Pe, flown path drawn around the Mun, phone layout fix",
+  "sha256": "9eebe3b3dd96e1d9b516ad269e9c2b56289916710b053d43497916d7e77d9b9e",
+  "notes": "Live flight: fly it yourself (navball, throttle, staging, SAS, warp, map with maneuver nodes). VAB: drag parts to move them, offset/rotate tools, re-root, mirror symmetry, action groups, drag-and-drop staging",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
