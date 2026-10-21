@@ -1,8 +1,8 @@
 {
-  "web": 13,
+  "web": 14,
   "apk": 3,
-  "sha256": "f81db461d5a47533fa62bd11692534d6d70896ce807f0918c8ad44a2ec5d93b8",
-  "notes": "Parachutes, wings, control surfaces and crash tolerances from the KSP wiki",
+  "sha256": "649ef01e86e98c428b57fd0a032f8270953279b3e3197c3f9fc65fc6f595836b",
+  "notes": "Models: wing and fin shapes from the KSP wiki's dimensions, part pictures for fins, winglets and parachutes; striped canopies",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
