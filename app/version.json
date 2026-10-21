@@ -1,8 +1,8 @@
 {
-  "web": 8,
+  "web": 9,
   "apk": 3,
-  "sha256": "ff7c60bf22994943a48c4d560e2342a0b88b04b17b77ee9ad474c942162a932b",
-  "notes": "kOS scripting, Mun and Minmus missions",
+  "sha256": "8a93f508433bccc8ce800ac9cf8f984d332f57e073ac2ad986f5fee69e7cd219",
+  "notes": "3D tracking-station map view",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
