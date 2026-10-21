@@ -1,8 +1,8 @@
 {
-  "web": 12,
+  "web": 13,
   "apk": 3,
-  "sha256": "0b1cca29a22e0a8a194ead2563ae7fe666cde505488bdf17774e617131886b9c",
-  "notes": "Reaction-wheel torques and crash tolerances from the KSP wiki",
+  "sha256": "f81db461d5a47533fa62bd11692534d6d70896ce807f0918c8ad44a2ec5d93b8",
+  "notes": "Parachutes, wings, control surfaces and crash tolerances from the KSP wiki",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
