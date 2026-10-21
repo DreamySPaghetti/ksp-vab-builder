@@ -1,8 +1,8 @@
 {
-  "web": 9,
+  "web": 10,
   "apk": 3,
-  "sha256": "8a93f508433bccc8ce800ac9cf8f984d332f57e073ac2ad986f5fee69e7cd219",
-  "notes": "3D tracking-station map view",
+  "sha256": "215b0d389d4724db6caf1eb7731ee514c0b858ccbb7afc0821be01dadf490ede",
+  "notes": "Map: orbit lines match Ap/Pe, flown path drawn around the Mun, phone layout fix",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
