@@ -1,8 +1,8 @@
 {
-  "web": 5,
+  "web": 6,
   "apk": 2,
-  "sha256": "8c794045de2c8a1a1bb6ed774e92c9455f3165b0bfa7723163b4a76c34218e1d",
-  "notes": "3D launch view; stock drag-cube aero and Kerbin atmosphere",
+  "sha256": "b8bffd88fd457eab81c555bf365e1948c307d016c2ee50b37ebbb4debc450921",
+  "notes": "Smaller, faster-loading build",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "R&D tech tree, building levels, game-style look",
   "minApk": 2
