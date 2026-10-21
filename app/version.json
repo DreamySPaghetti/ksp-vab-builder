@@ -1,8 +1,8 @@
 {
-  "web": 14,
+  "web": 15,
   "apk": 3,
-  "sha256": "649ef01e86e98c428b57fd0a032f8270953279b3e3197c3f9fc65fc6f595836b",
-  "notes": "Models: wing and fin shapes from the KSP wiki's dimensions, part pictures for fins, winglets and parachutes; striped canopies",
+  "sha256": "e8678468bfbf12796c0888a23f47f4164946f23990adc234613cd870a7d23cff",
+  "notes": "Aircraft parts: Panther, Goliath, intakes, Mk0/Mk1/Mk2/Mk3 liquid fuel fuselages, NCS adapter, tail fins, FAT-455 parts, landing gear; jets fly with intake air",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
