@@ -1,8 +1,8 @@
 {
-  "web": 45,
+  "web": 46,
   "apk": 3,
-  "sha256": "5278e1a968db62e636df9d1f5432b369ee89c6ebe68f2f81cf3027383afe990b",
-  "notes": "Spaceplanes (to orbit, STS shuttles, aircraft jobs), space stations and surface bases are back: design, build steps and tap-through flight plans for each; Spaceplane Hangar and Runway levels in Career; stricter plane, shuttle and station-lifter rules",
+  "sha256": "b1b2a04aadc912b02342cd478927cfc6162d03d0d2b3a3dfc350193a18e26c72",
+  "notes": "Shuttles now follow the STS layout (tank wider and taller than the orbiter, two long boosters, nose cone) and the 3D picture shows the orange tank, boosters and a delta-winged orbiter",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

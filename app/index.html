@@ -1228,8 +1228,13 @@ function evaluateShuttle(sh, goal, inv, detail, lim) {
     if (bot && CAP[sz(bot.d)] != null && held > CAP[sz(bot.d)]) stab.push(`The external tank's bottom ${bot.t} holds ${held.toFixed(0)} t of tank above it; that size takes about ${CAP[sz(bot.d)]} t. Use wider tanks.`);
     if (etD && etH / etD > 14) stab.push(`The external tank is ${etH.toFixed(0)} m tall and ${etD} m wide: too thin, it will bend. Use wider tanks.`); }
   chk('External tank: one size, strong and not too thin');
-  { const oW = Math.max(sz(B(sh.cmd).d) || 0, ...sh.otanks.map(t => sz(B(t).d) || 0)); if (etD < oW) stab.push(`The external tank (${etD} m) is narrower than the orbiter (${oW} m): the tank is the backbone of the stack, so it must be the widest part.`); }
-  chk('External tank at least as wide as the orbiter');
+  { const oW = Math.max(sz(B(sh.cmd).d) || 0, ...sh.otanks.map(t => sz(B(t).d) || 0)); if (etD <= oW) stab.push(`The external tank (${etD} m) must be wider than the orbiter (${oW} m), like the real STS: it is the backbone the orbiter and boosters hang on. Use bigger tanks for it.`);
+    const etH = sh.et.reduce((a, t) => a + B(t).h, 0) + (sh.etCone ? B(sh.etCone).h : 0), oL = B(sh.cmd).h + sh.otanks.reduce((a, t) => a + B(t).h, 0) + B(sh.eng).h;
+    if (etH < oL) stab.push(`The external tank (${etH.toFixed(1)} m) is shorter than the orbiter (${oL.toFixed(1)} m): make the tank taller than the orbiter.`);
+    if (sh.srb) { const u = B(sh.srb.unit); if ((sz(u.d) || 0) > etD) stab.push(`The ${u.t} boosters are wider than the tank: they must be narrower.`); if (u.h > etH + 0.5) stab.push(`The ${u.t} boosters (${u.h.toFixed(1)} m) stick up past the tank (${etH.toFixed(1)} m): pick shorter boosters or a taller tank.`); else if (u.h < etH * 0.6) stab.push(`The ${u.t} boosters (${u.h.toFixed(1)} m) are stubby next to the ${etH.toFixed(1)} m tank: STS boosters run most of its height. Use longer boosters.`); }
+    if (!sh.srb && Object.keys(inv || {}).some(id => B(id) && B(id).srb && inv[id] >= 2 && B(id).d !== 'r')) stab.push('An STS stack has two solid boosters beside the tank: add a pair.');
+    if (!sh.etCone && Object.keys(inv || {}).some(id => B(id) && B(id).cone && inv[id] > 0)) stab.push('Put a nose cone on top of the external tank.'); }
+  chk('STS layout: tank wider and taller than the orbiter, two boosters nearly as tall as the tank, nose cone on top');
   if (sh.et.length > 4) stab.push(`The external tank is ${sh.et.length} tanks stacked: use fewer, longer tanks (at most 4).`);
   chk('External tank built from a few long tanks');
   if (B(sh.cmd).crew && !B(sh.cmd).plane) stab.push(`${B(sh.cmd).t} is a blunt capsule: the orbiter glides home, so it needs a cockpit.`);
@@ -2490,24 +2495,45 @@ function plane(g, M, R) {
 
 function shuttle(g, M, R) {
   const sh = R.s, B = id => BY[id];
-  // external tank in the middle, boosters either side, orbiter on the front with its belly to the tank
-  const etD = Math.max(...sh.et.map(t => szv(B(t).d))), er = etD / 2; let y = 0;
-  if (sh.etCone) { nose(g, M, er, y, er * 1.6); }
-  const etMat = new THREE.MeshStandardMaterial({ color: 0xc8642a, roughness: .8 });
-  const etH = sh.et.reduce((a, t) => a + B(t).h, 0); mesh(g, new THREE.CylinderGeometry(er, er, etH, SEG), etMat, 0, y - etH / 2); y -= etH;
-  if (sh.srb) { const u = B(sh.srb.unit), br = rad(u.d === 'r' ? 0.625 : u.d); for (let k = 0; k < sh.srb.k; k++) { const a = (k % 2 ? Math.PI : 0) + Math.floor(k / 2) * .5 + Math.PI / 2, sub = new THREE.Group(); g.add(sub); nose(sub, M, br, -0.3, br * 2); engine(sub, M, u, -0.3 - Math.min(etH * .9, u.h * 1.0), 1, 0); mesh(sub, new THREE.CylinderGeometry(br, br, Math.min(etH * .9, u.h), SEG), M.srb || M.white, 0, -0.3 - Math.min(etH * .9, u.h) / 2); sub.position.set(Math.cos(a) * (er + br + .1), 0, Math.sin(a) * (er + br + .1)); } }
-  // orbiter
+  // drawn like the real STS: the orange external tank is the backbone, a solid booster either side of it, and the
+  // winged orbiter on the front, belly to the tank, nose at about three quarters of the tank's height. Bottoms line up.
+  const etD = Math.max(...sh.et.map(t => szv(B(t).d))), er = etD / 2, etH = sh.et.reduce((a, t) => a + B(t).h, 0), coneH = er * 1.8;
+  const etMat = M.tankOrange;
+  mesh(g, new THREE.CylinderGeometry(er, er, etH, SEG), etMat, 0, etH / 2);
+  { const pts = []; for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push([er * Math.cos(t * Math.PI / 2) ** 0.8, etH + coneH * t]); } mesh(g, lathe(pts), etMat, 0, 0); }
+  mesh(g, new THREE.CylinderGeometry(er * 1.01, er * 1.01, .08, SEG), M.dark, 0, etH * .55); // intertank ring
+  if (sh.srb) {
+    const u = B(sh.srb.unit), br = rad(u.d === 'r' ? 0.625 : u.d);
+    for (let k = 0; k < sh.srb.k; k++) {
+      const side = k % 2 ? -1 : 1, ring = Math.floor(k / 2), sub = new THREE.Group(); g.add(sub);
+      engine(sub, M, u, u.h, 1, 0); nose(sub, M, br, u.h, br * 2.2);
+      const a = ring * 0.5; sub.position.set(side * (er + br + .08) * Math.cos(a), -0.3, -(er + br + .08) * Math.sin(a));
+    }
+  }
+  // the orbiter: fuselage along +Y, belly (-Z) toward the tank, wings spread along X, fin on its back (+Z)
   const o = new THREE.Group(); g.add(o);
-  const cr = Math.max(0.6, rad(szv(B(sh.cmd).d) || 1.25)), oL = B(sh.cmd).h + sh.otanks.reduce((a, t) => a + B(t).h, 0) + B(sh.eng).h;
-  let oy = -etH * 0.08;
-  mesh(o, lathe([[.05, 0], [cr * .6, -cr * .6], [cr, -cr * 1.4]]), M.white, 0, oy); oy -= cr * 1.4;
-  mesh(o, new THREE.CylinderGeometry(cr, cr, oL, SEG), M.white, 0, oy - oL / 2);
-  const can = mesh(o, new THREE.SphereGeometry(cr * .4, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), M.glass, 0, oy + cr * .3, cr * .7); can.rotation.x = Math.PI / 2; can.scale.set(1, 1.6, .7);
-  const S = R.r.orbiter ? R.r.orbiter.S : 20, span = Math.min(oL * 1.2, Math.max(1.5, Math.sqrt(S) * 0.9)), wing = new THREE.Shape(); wing.moveTo(0, 0); wing.lineTo(span, -oL * .35); wing.lineTo(span, -oL * .55); wing.lineTo(0, -oL * .8);
-  for (const sgn of [1, -1]) { const w = mesh(o, new THREE.ExtrudeGeometry(wing, { depth: .08, bevelEnabled: false }), M.wing || M.white, 0, oy - oL * .15, -cr * .2); w.rotation.y = sgn > 0 ? 0 : Math.PI; }
-  const fin = new THREE.Shape(); fin.moveTo(0, 0); fin.lineTo(-cr * 2, 0); fin.lineTo(-cr * .4, -oL * .3); fin.lineTo(0, -oL * .3); const f = mesh(o, new THREE.ExtrudeGeometry(fin, { depth: .06, bevelEnabled: false }), M.white, -.03, oy - oL * .7, -cr * .2); f.rotation.y = Math.PI / 2; f.rotation.z = Math.PI / 2;
-  engine(o, M, B(sh.eng), oy - oL + B(sh.eng).h, sh.n, cr);
-  o.position.set(0, 0, er + cr + .15);
+  const cr = Math.max(0.55, rad(szv(B(sh.cmd).d) || 1.25)), body = B(sh.cmd).h + sh.otanks.reduce((a, t) => a + B(t).h, 0), E = B(sh.eng), eh = Math.min(1.4, E.h * .7);
+  const L = Math.max(body, etH * .62), noseL = cr * 2.2, tube = L - noseL;
+  let y = eh; // engines below, fuselage from y up
+  mesh(o, new THREE.CylinderGeometry(cr, cr * 1.05, tube, SEG), M.white, 0, y + tube / 2);
+  mesh(o, lathe([[cr, 0], [cr * .92, noseL * .3], [cr * .6, noseL * .7], [.04, noseL]]), M.white, 0, y + tube);
+  mesh(o, lathe([[cr * .5, 0], [cr * .3, noseL * .2], [.03, noseL * .32]]), M.dark, 0, y + tube + noseL * .68); // black nose cap
+  const can = mesh(o, new THREE.SphereGeometry(cr * .55, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), M.glass, 0, y + tube - cr * .1, cr * .55); can.rotation.x = Math.PI / 2; can.scale.set(1.15, 1.2, .55);
+  mesh(o, new THREE.BoxGeometry(cr * 1.6, tube * .9, .04), M.dark, 0, y + tube * .48, -cr * .98); // black belly tiles
+  // delta wings: root from 15% to 70% of the fuselage, tip near the back; span from the wing area
+  const S = R.r.orbiter && R.r.orbiter.S ? R.r.orbiter.S : 20, span = Math.max(cr * 1.8, Math.min(L * .55, Math.sqrt(S) * 0.95));
+  const dw = new THREE.Shape(); dw.moveTo(0, tube * .7); dw.lineTo(span * .35, tube * .45); dw.lineTo(span, tube * .08); dw.lineTo(span, 0); dw.lineTo(0, 0); dw.closePath();
+  const wg = new THREE.ExtrudeGeometry(dw, { depth: .12, bevelEnabled: true, bevelSize: .03, bevelThickness: .03, bevelSegments: 1 }); wg.translate(0, 0, -.06);
+  for (const sgn of [1, -1]) { const w = mesh(o, wg, M.white, sgn * cr * .85, y, -cr * .55); w.scale.x = sgn; mesh(o, new THREE.BoxGeometry(span * .9, .05, .14), M.dark, sgn * (cr * .85 + span * .5), y + .05, -cr * .55); }
+  // vertical tail on the back
+  const fh = Math.max(cr * 1.6, Math.min(L * .3, Math.sqrt(S) * .55)), fs = new THREE.Shape(); fs.moveTo(0, 0); fs.lineTo(0, fh * 1.3); fs.lineTo(fh, fh * .45); fs.lineTo(fh, fh * .05); fs.closePath();
+  const fg = new THREE.ExtrudeGeometry(fs, { depth: .1, bevelEnabled: false }); fg.translate(0, 0, -.05);
+  const fin = mesh(o, fg, M.white, 0, y + .1, cr * .8); fin.rotation.y = -Math.PI / 2;
+  // main engine cluster at the tail (three like the real one when there are three)
+  const n = Math.max(1, sh.n), er2 = Math.min(cr * .45, rad(E.d === 'r' ? 0.625 : E.d) * .7);
+  for (let k = 0; k < n; k++) { const ang = n === 1 ? 0 : k / n * Math.PI * 2 + Math.PI / 2, rr = n === 1 ? 0 : cr * .5; bellAt(o, M, Math.cos(ang) * rr, y, Math.sin(ang) * rr * .8, er2 * .45, er2, eh); }
+  mesh(o, new THREE.CylinderGeometry(cr * 1.05, cr * 1.05, .12, SEG), M.dark, 0, y, 0);
+  o.position.set(0, -0.15, er + cr + .12);
 }
 function draw(canvas, R, kind) {
   const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); r.setClearColor(0, 0); r.setPixelRatio(Math.min(2, devicePixelRatio || 1));
