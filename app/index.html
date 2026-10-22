@@ -1092,6 +1092,7 @@ function mutate(g, inv, C, r) {
 
 // tidy: drop empty stages and boosters that can't burn
 function tidy(g) {
+  for (const s of g.stages) if (s.eng && BY[s.eng].srb && s.tanks.length) s.tanks = []; // a solid booster stage has no use for liquid tanks
   g.stages = g.stages.filter(s => (s.eng && (BY[s.eng].srb || BY[s.eng].lf || s.tanks.length)) || (!s.eng && s.tanks.length)); // an engine needs fuel
   if (g.stages.length) g.stages[0].dec = null;
   return g;
