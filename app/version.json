@@ -1,8 +1,8 @@
 {
-  "web": 20,
+  "web": 21,
   "apk": 3,
-  "sha256": "292fa10b0399456c8f8a6e4e19818fff86d2a28508975bf843ce44ea843895db",
-  "notes": "New look: space backdrop, glass panels, animated tabs, rocket progress bar, results that animate in",
+  "sha256": "26d034ba7dad4e01b77072a5611b96c45221e08400017e010fe793575cf64792",
+  "notes": "Sharper 3D models with KSP-style textures; spaceplanes now face the right way",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
