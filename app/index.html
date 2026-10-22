@@ -45,7 +45,7 @@ label.ck { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px }
 .verdict.ok { background: #233022; border-color: #4e7f2c } .verdict.bad { background: #3a2422; border-color: #8a3a31 }
 .verdict b { display: block; font-size: 17px }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px }
-.stats div { background: var(--panel); border-radius: 6px; padding: 7px 9px } .stats .k { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) } .stats .v { font-weight: 700; font-size: 16px }
+.stats > div { background: var(--panel); border-radius: 6px; padding: 7px 9px } .stats .k { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) } .stats .v { font-weight: 700; font-size: 16px }
 #view { width: 100%; height: 340px; border-radius: 8px; background: radial-gradient(#2c343a, #111518); display: block; touch-action: none; margin-bottom: 10px }
 .stage { border-left: 3px solid var(--acc); padding: 8px 10px; margin-bottom: 8px; background: var(--panel); border-radius: 0 8px 8px 0 }
 .stage h4 { margin: 0 0 4px; font-size: 14px } .stage .m { font-size: 12.5px; color: var(--muted) } .stage ul { margin: 6px 0 0; padding-left: 18px } .stage li { margin: 1px 0 }
@@ -980,6 +980,13 @@ function airTask(d, task) {
   res.msg = res.ok ? `Range ${rangeKm.toFixed(0)} km, needs ${needKm.toFixed(0)} km with reserve.` : `Range ${rangeKm.toFixed(0)} km, ${(-res.marginKm).toFixed(0)} km short.`;
   return res;
 }
+// planes longer than about 10× their width bend, tail-strike on takeoff and won't balance
+function shapePen(d) {
+  const len = [d.cmd, ...d.tanks].reduce((a, id) => a + BY[id].h, 0) + BY[d.jet.id].h + d.intakes.filter(([id]) => BY[id].lf && !BY[id].pod).reduce((a, [id, n]) => a + BY[id].h * n, 0);
+  const wid = Math.max(...[d.cmd, ...d.tanks, d.jet.id, ...d.intakes.map(([id]) => id)].map(id => BY[id].d).filter(x => x !== 'r').map(x => x === 'mk2' ? 1.5 : x === 'mk3' ? 3.75 : x));
+  const ratio = len / Math.max(wid, .6), over = Math.max(0, ratio - 10);
+  return { len, wid, ratio, pen: over * 400, note: over > 0 ? `Too long for its width (${len.toFixed(0)} m by ${wid} m): use a wider fuselage instead of more tanks.` : null };
+}
 function airScore(d, task, lim) {
   const f = airTask(d, task), k = f.build;
   const lims = [];
@@ -990,9 +997,12 @@ function airScore(d, task, lim) {
   const limPen = lims.reduce((a, l) => a + 3000 + 3000 * (l.have - l.max) / l.max, 0);
   const margin = f.marginKm != null ? f.marginKm : -(f.shortKm || 999);
   const ok = f.ok && !lims.length;
-  let sc = -limPen + margin - k.parts * 0.5 - k.cost * 1e-4 - (f.ok ? 0 : 500);
-  if (lim && lim.objective === 'cheap' && ok) sc = 1e5 - k.cost * 0.3 - k.parts * 5;
-  return { score: sc, ok, margin, lims, fails: [], f, air: true, cost: k.cost, parts: k.parts };
+  const sp = shapePen(d), need = f.needKm || 100;
+  // past half again the distance needed, more range isn't worth more fuselage
+  let sc = -limPen - sp.pen + Math.min(margin, need * 0.5) - k.parts * 2 - k.cost * 0.01 - (f.ok ? 0 : 500);
+  const ok2 = ok && !sp.note;
+  if (lim && lim.objective === 'cheap' && ok2) sc = 1e5 - k.cost * 0.3 - k.parts * 5;
+  return { score: sc, ok: ok2, margin, lims, fails: [], stab: sp.note ? [sp.note] : [], f, air: true, cost: k.cost, parts: k.parts };
 }
 function score(d, goal, lim) {
   if (lim && lim.task) return airScore(d, lim.task, lim);
@@ -1011,9 +1021,9 @@ function score(d, goal, lim) {
   const R = d.rocket ? BY[d.rocket.id] : BY[d.jet.id], n = d.rocket ? d.rocket.n : d.jet.n;
   const fails = [];
   for (const p of ph) { const g = O.BODY[p.body].g, twr = n * R.tv / (f.mOrbit * g), want = p.k === 'land' ? (p.chute ? 0 : 2) : p.k === 'ascent' ? 1.6 : 0.15; if (twr < want) fails.push({ ph: p.name, twr, need: want }); }
-  const margin = f.dvLeft - need;
+  const margin = f.dvLeft - need, sp = shapePen(d);
   if (lim && lim.objective === 'cheap') { const reserve = Math.max(150, need * 0.05 + 50), okk = margin >= reserve && !fails.length && !lims.length; if (okk) return { score: 1e5 - k.cost * 0.3 - k.parts * 5, ok: true, margin, fails, lims, f, cost: k.cost, parts: k.parts }; }
-  return { score: -limPen + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length, margin, fails, lims, f, cost: k.cost, parts: k.parts };
+  return { score: -limPen - sp.pen + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length && !sp.note, margin, fails, lims, stab: sp.note ? [sp.note] : [], f, cost: k.cost, parts: k.parts };
 }
 
 function optimize(inv, goal, opts = {}) {
@@ -1544,7 +1554,7 @@ function countUp(root) {
 const mlabel = R => !R || R.error ? '' : ` (${R.r.margin >= 0 ? '+' : ''}${fmt(R.r.margin)} ${R.r.air ? 'km' : 'm/s'})`;
 function airHtml(R) {
   const { d, r } = R, B = id => BY[id], f = r.f, k = f.build, t = airTask();
-  let h = `<div class="verdict ${r.ok ? 'ok' : 'bad'}"><b>${r.ok ? 'Can do it: ' : 'Can\'t do it: '}${esc(airName())}</b>${esc(f.msg)}${(r.lims || []).map(l => ` <span class="warn">${limText(l, true)}</span>`).join('')}</div>
+  let h = `<div class="verdict ${r.ok ? 'ok' : 'bad'}"><b>${r.ok ? 'Can do it: ' : 'Can\'t do it: '}${esc(airName())}</b>${esc(f.msg)}${(r.stab || []).map(t => ` <span class="warn">${esc(t)}</span>`).join('')}${(r.lims || []).map(l => ` <span class="warn">${limText(l, true)}</span>`).join('')}</div>
   <div class="stats"><div><div class="k">Mass</div><div class="v">${fmt(k.m + (f.cargo || 0), 1)} t</div></div><div><div class="k">Parts</div><div class="v">${k.parts}</div></div><div><div class="k">Cost</div><div class="v">√${fmt(k.cost)}</div></div>
   <div><div class="k">Range</div><div class="v">${f.rangeKm ? fmt(f.rangeKm) + ' km' : '—'}</div></div><div><div class="k">Cruise</div><div class="v">${f.alt ? fmt(f.alt / 1000, 1) + ' km' : '—'}</div></div><div><div class="k">Speed</div><div class="v">${f.v ? fmt(f.v) + ' m/s' : '—'}</div></div></div><canvas id="view"></canvas>`;
   h += `<div class="card"><h3>Build it, nose to tail</h3><ol style="margin:0;padding-left:20px"><li>${esc(B(d.cmd).t)}</li>${d.tanks.map(id => `<li>${esc(B(id).t)}</li>`).join('')}<li>${d.jet.n}× ${esc(B(d.jet.id).t)}</li></ol><ul style="margin:8px 0 0;padding-left:20px">
