@@ -1,8 +1,8 @@
 {
-  "web": 15,
+  "web": 16,
   "apk": 3,
-  "sha256": "e8678468bfbf12796c0888a23f47f4164946f23990adc234613cd870a7d23cff",
-  "notes": "Aircraft parts: Panther, Goliath, intakes, Mk0/Mk1/Mk2/Mk3 liquid fuel fuselages, NCS adapter, tail fins, FAT-455 parts, landing gear; jets fly with intake air",
+  "sha256": "ef89b281a02975bb8ba6dcc9c84b6135af8fc0f788b2753c610e4e757a5f772b",
+  "notes": "New app: Ship Optimizer \u2014 pick your parts and a goal, and it finds the best rocket or spaceplane",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
