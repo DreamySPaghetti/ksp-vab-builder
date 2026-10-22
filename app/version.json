@@ -1,8 +1,8 @@
 {
-  "web": 33,
+  "web": 34,
   "apk": 3,
-  "sha256": "357341c19abfed9ce0be03056b2680fbae7ee1ce3c7d24ea5704a0350ade48b9",
-  "notes": "Must-use parts on the Goal tab: type a part name to pin it; works with the auto builder, planes, stations and bases.",
+  "sha256": "2aba2b6b2cc1f4b5ef90465662a1e8ca6d9a12c2964bd6548e442045af375834",
+  "notes": "Fix: 3D picture was blank for rockets with side-mounted tanks. New structure rules: parts can't hold more than their size allows, no more than two tank sizes per stage.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
