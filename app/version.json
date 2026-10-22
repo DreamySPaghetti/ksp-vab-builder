@@ -1,8 +1,8 @@
 {
-  "web": 16,
+  "web": 17,
   "apk": 3,
-  "sha256": "ef89b281a02975bb8ba6dcc9c84b6135af8fc0f788b2753c610e4e757a5f772b",
-  "notes": "New app: Ship Optimizer \u2014 pick your parts and a goal, and it finds the best rocket or spaceplane",
+  "sha256": "428f6cc1a1f6a501d9f3c6454a14336fc393fc92076b98ccd51c3cf7311578f2",
+  "notes": "Career mode: set researched tech nodes and building levels; locked parts and building limits are respected",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
