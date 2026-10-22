@@ -868,10 +868,10 @@ function partLine(p) {
 }
 // ---- parts tab
 const CATS = ['All', ...new Set(PARTS.map(p => p.cat))];
-function renderCats() { $('cats').innerHTML = CATS.map(c => `<button type="button" data-cat="${c}" aria-pressed="${st.cat === c}">${c}</button>`).join(''); }
+function renderCats() { $('cats').innerHTML = CATS.filter(c => c === 'All' || PARTS.some(p => p.cat === c && !locked(p.id))).map(c => `<button type="button" data-cat="${c}" aria-pressed="${st.cat === c}">${c}</button>`).join(''); }
 function renderList() {
   const q = $('q').value.trim().toLowerCase();
-  const list = PARTS.filter(p => (st.cat === 'All' || p.cat === st.cat) && (!q || p.t.toLowerCase().includes(q)) && (!st.mine || st.inv[p.id] > 0));
+  const list = PARTS.filter(p => !locked(p.id) && (st.cat === 'All' || p.cat === st.cat) && (!q || p.t.toLowerCase().includes(q)) && (!st.mine || st.inv[p.id] > 0));
   $('plist').innerHTML = list.map(p => { const n = st.inv[p.id] || 0, lk = locked(p.id); return `<div class="pr ${n ? 'has' : ''} ${lk ? 'lock' : ''}"><div style="min-width:0"><div class="t">${esc(p.t)}</div><div class="s">${esc(partLine(p))}</div>${lk ? `<div class="lockt">Not researched: ${esc(p.tech)}</div>` : ''}</div><div class="qty"><button type="button" data-d="-1" data-id="${p.id}" aria-label="Fewer">−</button><input inputmode="numeric" data-id="${p.id}" value="${n}" aria-label="How many"><button type="button" data-d="1" data-id="${p.id}" aria-label="More">+</button></div></div>`; }).join('') || '<p class="note">No parts match.</p>';
   renderSum();
 }
@@ -889,7 +889,7 @@ function renderSum() {
   const nLocked = Object.keys(st.inv).filter(id => st.inv[id] > 0 && locked(id)).length;
   const n = ids.reduce((a, id) => a + st.inv[id], 0);
   const cmd = ids.some(id => BY[id].cmd), eng = ids.some(id => BY[id].ta != null || BY[id].jet);
-  $('invSum').innerHTML = n ? `<b>${n}</b> parts of <b>${ids.length}</b> kinds. ${cmd ? '' : '<span class="warn">Add a pod, cockpit or probe.</span> '}${eng ? '' : '<span class="warn">Add an engine.</span>'} Set how many of each you have; the optimizer may leave some out.${nLocked ? ` <span class="warn">${nLocked} kind${nLocked > 1 ? 's' : ''} not researched yet, so left out.</span>` : ''}${st.career.on ? ` <span class="note">Career: VAB ${st.career.vab}, Pad ${st.career.pad}, SPH ${st.career.sph}, Runway ${st.career.runway}.</span>` : ''}` : 'Tap + on the parts you want to build with and set how many you have.';
+  $('invSum').innerHTML = n ? `<b>${n}</b> parts of <b>${ids.length}</b> kinds. ${cmd ? '' : '<span class="warn">Add a pod, cockpit or probe.</span> '}${eng ? '' : '<span class="warn">Add an engine.</span>'} Set how many of each you have; the optimizer may leave some out.${nLocked ? ` <span class="warn">${nLocked} kind${nLocked > 1 ? 's' : ''} you added ${nLocked > 1 ? 'are' : 'is'} no longer researched, so hidden and left out.</span>` : ''}${st.career.on ? ` <span class="note">Career: VAB ${st.career.vab}, Pad ${st.career.pad}, SPH ${st.career.sph}, Runway ${st.career.runway}.</span>` : ''}` : 'Tap + on the parts you want to build with and set how many you have.';
 }
 $('cats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; st.cat = b.dataset.cat; renderCats(); renderList(); save(); });
 $('q').addEventListener('input', renderList);
@@ -898,7 +898,7 @@ $('btnClear').onclick = () => { if (!Object.keys(st.inv).length) return; st.inv 
 $('plist').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; const id = b.dataset.id; st.inv[id] = Math.max(0, (st.inv[id] || 0) + +b.dataset.d); if (!st.inv[id]) delete st.inv[id]; const row = b.closest('.pr'); row.querySelector('input').value = st.inv[id] || 0; row.classList.toggle('has', !!st.inv[id]); renderSum(); save(); });
 $('plist').addEventListener('change', e => { const i = e.target.closest('input[data-id]'); if (!i) return; const v = Math.max(0, Math.min(99, parseInt(i.value, 10) || 0)); if (v) st.inv[i.dataset.id] = v; else delete st.inv[i.dataset.id]; i.value = v; i.closest('.pr').classList.toggle('has', !!v); renderSum(); save(); });
 // ---- tabs
-function setTab(t) { if (st.tab !== t) document.querySelector('main').scrollTop = 0; st.tab = t; document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'parts') renderList(); }
+function setTab(t) { if (st.tab !== t) document.querySelector('main').scrollTop = 0; st.tab = t; document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'parts') { if (!document.querySelector('#cats [aria-pressed=true]') || (st.cat !== 'All' && !PARTS.some(p => p.cat === st.cat && !locked(p.id)))) st.cat = 'All'; renderCats(); renderList(); } }
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 // ---- goal tab
 // goal: any stock body, and what to do there
@@ -1067,11 +1067,12 @@ function renderCareer() {
     ${lvl('sph', 'Spaceplane Hangar', i => `Planes: ${inf(BUILD.sph.parts[i])} parts`)}
     ${lvl('runway', 'Runway', i => `Planes: ${inf(BUILD.runway.mass[i])} t, ${sizeT(BUILD.runway.size[i])}`)}
     ${lvl('rnd', 'Research & Development', i => `Can research nodes up to ${inf(BUILD.rnd.cost[i])} science`)}</div>`;
-  h += `<div class="card"><h3>Researched</h3><p class="note" style="margin:0 0 8px">${set.size} of ${TECH.length} nodes · ${fmt(spent)} science · ${PARTS.filter(p => set.has(p.tech)).length} of ${PARTS.length} parts unlocked. Ticking a node also ticks what it needs; unticking one also unticks what depends on it.</p>
-    <div class="row"><button class="btn" type="button" data-preset="start">Start only</button><select id="upTier" style="width:auto"><option value="">Everything up to tier…</option>${[2, 3, 4, 5, 6, 7, 8, 9].map(t => `<option value="${t}">Tier ${t}</option>`).join('')}</select><button class="btn" type="button" data-preset="all">All</button></div></div>`;
+  h += `<div class="card"><h3>Researched</h3><p class="note" style="margin:0 0 8px">${set.size} of ${TECH.length} nodes · ${fmt(spent)} science · ${PARTS.filter(p => set.has(p.tech)).length} of ${PARTS.length} parts unlocked. Ticking a node also ticks what it needs; unticking one also unticks what depends on it. ${st.fullTree ? 'Showing the whole tree.' : 'Showing what you have and what you can research next, like the game.'}</p>
+    <div class="row"><button class="btn" type="button" data-preset="start">Start only</button><select id="upTier" style="width:auto"><option value="">Everything up to tier…</option>${[2, 3, 4, 5, 6, 7, 8, 9].map(t => `<option value="${t}">Tier ${t}</option>`).join('')}</select><button class="btn" type="button" data-preset="all">All</button><button class="btn" type="button" data-preset="tree">${st.fullTree ? 'Hide locked nodes' : 'Show whole tree'}</button></div></div>`;
   for (let tier = 1; tier <= 9; tier++) {
-    const ns = TECH.filter(n => n[1] === tier).map(n => TBY[n[0]]);
-    h += `<div class="tier"><h4>Tier ${tier} · ${fmt(ns[0].cost)} science</h4>`;
+    const ns = TECH.filter(n => n[1] === tier).map(n => TBY[n[0]]).filter(n => st.fullTree || set.has(n.name) || reqMet(n, set));
+    if (!ns.length) continue;
+    h += `<div class="tier"><h4>Tier ${tier} · ${fmt(TBY[TECH.find(n => n[1] === tier)[0]].cost)} science</h4>`;
     for (const n of ns) {
       const on = set.has(n.name), pp = partsIn(n.name), over = n.cost > cap;
       h += `<label class="node ${on ? 'on' : ''}"><input type="checkbox" data-node="${esc(n.name)}" ${on ? 'checked' : ''} ${n.name === 'Start' ? 'disabled' : ''}><div style="min-width:0"><div class="t">${esc(n.name)}</div><div class="pp">${pp.length ? esc(pp.map(p => p.t).join(', ')) : 'No parts this app uses'}</div>${n.req.length ? `<div class="pp">Needs ${esc(n.req.join(n.any ? ' or ' : ' and '))}</div>` : ''}${over && !on ? `<div class="lockt">Needs R&amp;D level ${n.cost > 500 ? 3 : 2}</div>` : ''}</div><div class="c">${fmt(n.cost)}</div></label>`;
@@ -1080,10 +1081,10 @@ function renderCareer() {
   }
   el.innerHTML = h;
 }
-document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { st.career.on = b.dataset.mode === 'career'; save(); renderCareer(); });
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { st.career.on = b.dataset.mode === 'career'; save(); renderCareer(); renderCats(); });
 $('careerBody').addEventListener('click', e => {
   const b = e.target.closest('[data-bld]'); if (b) { st.career[b.dataset.bld] = +b.dataset.lv; save(); renderCareer(); return; }
-  const p = e.target.closest('[data-preset]'); if (p) { st.career.nodes = p.dataset.preset === 'all' ? TECH.map(n => n[0]) : ['Start']; save(); renderCareer(); }
+  const p = e.target.closest('[data-preset]'); if (p && p.dataset.preset === 'tree') { st.fullTree = !st.fullTree; save(); renderCareer(); return; } if (p) { st.career.nodes = p.dataset.preset === 'all' ? TECH.map(n => n[0]) : ['Start']; save(); renderCareer(); }
 });
 $('careerBody').addEventListener('change', e => {
   if (e.target.id === 'upTier' && e.target.value) { st.career.nodes = TECH.filter(n => n[1] <= +e.target.value).map(n => n[0]); save(); renderCareer(); return; }

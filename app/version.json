@@ -1,8 +1,8 @@
 {
-  "web": 18,
+  "web": 19,
   "apk": 3,
-  "sha256": "1931077628fef63aeba91c5dc3814534e7deb7216062502aaa1e1dcb2f2325ac",
-  "notes": "Every planet and moon: pick any body and flyby, orbit, landing, orbit-and-return or landing-and-return",
+  "sha256": "3df65618468313c72c2b10037b0e8991ec4e18ab824b0cce32907ef5cd2a534f",
+  "notes": "Career: locked parts and unreachable tech nodes are hidden",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
