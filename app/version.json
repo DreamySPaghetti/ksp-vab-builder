@@ -1,8 +1,8 @@
 {
-  "web": 41,
+  "web": 42,
   "apk": 3,
-  "sha256": "bc7a6986c74a9f269863ad2df88ff5276b5496f285cd5fb79ce730bcbbb620d5",
-  "notes": "Boosters must sit evenly around the core: one ring, or two rings with the same count and size that alternate; no more than fit around the core.",
+  "sha256": "7d1dff26e80c1b386d9296e0c91278a26f2807c97876bdb3df3692582f6f5ecc",
+  "notes": "Mission Companion: career setup, mission designer (three options from 500,000 tested designs), VAB build steps, KSP staging list and a tap-through flight plan with transfer angles and window dates.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
