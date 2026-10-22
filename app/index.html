@@ -915,8 +915,10 @@ function evaluate(g, goal, inv, detail, lim) {
       const h = B(b.unit).h + b.tanks.reduce((a, t) => a + B(t).h, 0) + (b.cone ? 0.6 : 0);
       if (h > coreH + 1.5) { stab.push(`The ${esc0(B(b.unit).t)} boosters are ${h.toFixed(1)} m long but the stage they hang on is ${coreH.toFixed(1)} m: they need something to attach to. Make the core longer or the boosters shorter.`); break; }
       if (new Set(b.tanks.map(t => B(t).d)).size > 2) { stab.push(`The ${esc0(B(b.unit).t)} boosters mix too many tank sizes.`); break; }
+      const bw = Math.max(sz(B(b.unit).d) || 0, ...b.tanks.map(t => sz(B(t).d))), cw = stW(bs);
+      if (bw > cw + 0.01) { stab.push(`The boosters are ${bw} m wide on a ${cw} m core: side boosters can't be wider than the stage they hang on. Use a wider core or narrower boosters.`); break; }
     }
-    chk('Boosters no longer than the core they hang on');
+    chk('Boosters no longer or wider than the core they hang on');
   }
   if (rgs.some(b => b.cross)) { // asparagus: crossfeed only between liquid rocket engines that burn the same fuel as the core
     const bad = rgs.find(b => b.cross && (BY[b.unit].srb || BY[b.unit].fuel !== 'LFO')) || (g.stages.length && g.stages[g.stages.length - 1].eng && BY[g.stages[g.stages.length - 1].eng].fuel !== 'LFO' ? rgs.find(b => b.cross) : null);
@@ -1141,8 +1143,8 @@ function optimize(inv, goal, opts = {}) {
     g.stages.push({ eng: e0, n: BY[e0].d === 'r' ? Math.min(4, inv[e0]) : 1, tanks: [], dec: null });
     if (mustCmd) g.cmd = mustCmd;
     const mEng = must.filter(id => BY[id].ta != null && !BY[id].srb), mSrb = must.find(id => BY[id].srb), mTank = must.filter(id => BY[id].cat === 'Fuel tanks'), mDec = must.filter(id => BY[id].dec && !BY[id].radial);
-    if (mEng.length) g.stages = mEng.map((e, i) => ({ eng: e, n: BY[e].d === 'r' ? Math.min(4, inv[e]) : 1, tanks: i === 0 ? mTank.slice() : [], dec: i ? (mDec[i - 1] || C.decs[0] || null) : null }));
-    else if (mTank.length && g.stages[0]) g.stages[0].tanks = mTank.slice();
+    if (mEng.length) g.stages = mEng.map((e, i) => ({ eng: e, n: BY[e].d === 'r' ? Math.min(4, inv[e]) : 1, tanks: i === mEng.length - 1 ? mTank.slice() : [], dec: i ? (mDec[i - 1] || C.decs[0] || null) : null }));
+    else if (mTank.length && g.stages.length) g.stages[g.stages.length - 1].tanks = mTank.slice(); // must-use tanks go in the core, not on a booster
     if (mEng.length) { // give must-use engines tanks they can burn, and a sea-level stage under a vacuum engine
       const tankFor = e => C.tanks.filter(t => (BY[e].fuel === 'LF' ? !(BY[t].ox > 0) : BY[t].ox > 0) && (BY[e].d === 'r' || BY[t].d === BY[e].d)).sort((a, b) => BY[b].m - BY[a].m)[0] || C.tanks.find(t => BY[e].fuel === 'LF' ? !(BY[t].ox > 0) : BY[t].ox > 0);
       for (const st0 of g.stages) if (!st0.tanks.length) { const t = tankFor(st0.eng); if (t) st0.tanks.push(t, t); }
@@ -1989,6 +1991,7 @@ function rocket(g, M, R) {
   const stackChute = fix.find(([id]) => B(id).chute && B(id).d !== 'r');
   if (stackChute) chute(g, M, B(stackChute[0]), y, rad(cmd.top || cmd.d));
   y -= pod(g, M, cmd, y);
+  for (const [id, n] of fix) { const p = B(id); if (!p.sci || p.d === 'r') continue; for (let k = 0; k < n; k++) { const r = rad(p.d), h = Math.max(.4, p.h); mesh(g, new THREE.CylinderGeometry(r, r, h, SEG), M.grey, 0, y - h / 2); mesh(g, new THREE.BoxGeometry(r * 1.2, h * .6, .05), M.dark, 0, y - h / 2, r * .98); y -= h; } } // stack science parts (Science Jr.) right under the pod
   if (d.lander) { // the lander rides under the pod, inside an open adapter
     const L = d.lander, lc = B(L.cmd);
     mesh(g, new THREE.CylinderGeometry(rc, rc * 1.15, .25, SEG), M.metal, 0, y - .12); y -= .25;
@@ -2018,12 +2021,13 @@ function rocket(g, M, R) {
       const u = B(b.unit), br = rad(u.d === 'r' ? 0.625 : u.d), off = tr + br + .12 + ri * 0.05;
       for (let k = 0; k < b.k; k++) {
         const a = k / b.k * Math.PI * 2 + Math.PI / b.k + ri * Math.PI / (b.k * 2), sub = new THREE.Group(); g.add(sub);
-        let by = tankTop - .3;
+        const blen = b.tanks.reduce((q, t) => q + B(t).h, 0) + u.h * 0.9; // hung low: booster engines level with the core's
+        let by = Math.min(tankTop - .3, y + blen);
         if (b.cone) { nose(sub, M, br, by, br * 2); }
         for (const t of b.tanks) { by -= tank(sub, M, B(t), by); }
         by -= engine(sub, M, u, by, 1, 0);
         sub.position.set(Math.cos(a) * off, 0, Math.sin(a) * off);
-        const strut = mesh(g, new THREE.BoxGeometry(off - tr, .25, .2), b.cross ? M.orange : M.hazard, Math.cos(a) * (tr + (off - tr) / 2), tankTop - 1, Math.sin(a) * (tr + (off - tr) / 2)); strut.rotation.y = -a;
+        const strut = mesh(g, new THREE.BoxGeometry(off - tr, .25, .2), b.cross ? M.orange : M.hazard, Math.cos(a) * (tr + (off - tr) / 2), Math.min(tankTop - 1, y + blen - 1), Math.sin(a) * (tr + (off - tr) / 2)); strut.rotation.y = -a;
       }
     }); }
     lastR = tr; bottomY = y;
@@ -2465,7 +2469,7 @@ function rocketHtml(R) {
     const ts = s.tanks.slice().sort((a, b) => sz(B(a).d) - sz(B(b).d));
     for (const t of ts) { if (B(t).d === 'r') h += `<li>${esc(B(t).t)} (on the side)</li>`; else item(B(t).t, esc(B(t).t)); }
     if (s.eng) { if (B(s.eng).d === 'r') h += `<li>${s.n}× ${esc(B(s.eng).t)} around the bottom tank (${s.n}× symmetry)</li>`; else item(B(s.eng).t, `${s.n > 1 ? s.n + '× ' : ''}${esc(B(s.eng).t)}`); }
-    if (i === g.stages.length - 1) O.ringsOf(g).forEach((b, ri, all) => { h += `<li>${all.length > 1 ? `Booster ring ${ri + 1}${ri === 0 ? ' (outer, drops first)' : ''}` : 'Boosters'}, ${b.k}× symmetry on the bottom tank: ${esc(B(b.dec).t)} → ${b.tanks.map(t => esc(B(t).t)).join(' → ')}${b.tanks.length ? ' → ' : ''}${esc(B(b.unit).t)}${b.cone ? `, ${esc(B(b.cone).t)} on top` : ''}${b.cross ? '. <b>Crossfeed on</b> (asparagus): right-click each radial decoupler → Enable crossfeed, so these feed the engines inside them and drop when empty' : ''}</li>`; });
+    if (i === g.stages.length - 1) O.ringsOf(g).forEach((b, ri, all) => { h += `<li>${all.length > 1 ? `Booster ring ${ri + 1}${ri === 0 ? ' (outer, drops first)' : ''}` : 'Boosters'}, ${b.k}× symmetry, low on the bottom tank so their engines sit level with the core's: ${esc(B(b.dec).t)} → ${b.tanks.map(t => esc(B(t).t)).join(' → ')}${b.tanks.length ? ' → ' : ''}${esc(B(b.unit).t)}${b.cone ? `, ${esc(B(b.cone).t)} on top` : ''}${b.cross ? '. <b>Crossfeed on</b> (asparagus): right-click each radial decoupler → Enable crossfeed, so these feed the engines inside them and drop when empty' : ''}</li>`; });
     void joins;
   });
   const side = fix.filter(([id]) => B(id).stn && B(id).d === 'r');

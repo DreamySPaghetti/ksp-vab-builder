@@ -1,8 +1,8 @@
 {
-  "web": 35,
+  "web": 36,
   "apk": 3,
-  "sha256": "56ecbbc9872194bb5be2df161bf8d4de84688c31a89af2a1b7e6e5774dd66dc3",
-  "notes": "Every run tests at least 500,000 designs on all cores; no effort setting. Rockets grow sideways: two booster rings, asparagus crossfeed, separate Apollo-style landers. New shuttle (STS) designs. Cargo to carry. Tighter rules: leg strength, parachute capacity, heat shield size, booster length, simple wings.",
+  "sha256": "49e5a860f051820e4ce6c92d9e7256c79b61e088c2b4f174b51af9e55f547013",
+  "notes": "Boosters can't be wider than the core and hang low, engines level with the core's; must-use tanks go in the core stage; stack science parts drawn under the pod.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
