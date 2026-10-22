@@ -1524,6 +1524,49 @@ function planetWindow(from, to, t0) {
   return { phase: target, now, wait, when: t0 + wait, synodic, days: h.t / DAY, ejection: ej, outward: a2 > a1, burn, incl };
 }
 
+// ---- exact transfer windows (the method of alexmoon's Launch Window Planner, listed on the wiki's Calculation tools
+// page): real eccentric, tilted planet orbits, a Lambert solve for every departure date and flight time, and the date
+// with the cheapest ejection (plus capture when there's no air to brake in)
+const v3 = { sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], norm: a => Math.hypot(a[0], a[1], a[2]), cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k] };
+function stateAt(b, t) {
+  const o = ORB[b], n = Math.sqrt(MU_SUN / o.a ** 3), M = o.m0 + n * t, e = o.e;
+  let E = M; for (let k = 0; k < 30; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2)), r = o.a * (1 - e * Math.cos(E)), p = o.a * (1 - e * e);
+  const px = r * Math.cos(nu), py = r * Math.sin(nu), vk = Math.sqrt(MU_SUN / p), vx = -vk * Math.sin(nu), vy = vk * (e + Math.cos(nu));
+  const W = o.lan * D, w = o.w * D, I = o.i * D, cW = Math.cos(W), sW = Math.sin(W), cw = Math.cos(w), sw = Math.sin(w), cI = Math.cos(I), sI = Math.sin(I);
+  const R = [[cW * cw - sW * sw * cI, -cW * sw - sW * cw * cI], [sW * cw + cW * sw * cI, -sW * sw + cW * cw * cI], [sw * sI, cw * sI]];
+  return { r: R.map(q => q[0] * px + q[1] * py), v: R.map(q => q[0] * vx + q[1] * vy) };
+}
+const stC = z => z > 1e-6 ? (1 - Math.cos(Math.sqrt(z))) / z : z < -1e-6 ? (Math.cosh(Math.sqrt(-z)) - 1) / -z : 0.5;
+const stS = z => z > 1e-6 ? (Math.sqrt(z) - Math.sin(Math.sqrt(z))) / Math.sqrt(z) ** 3 : z < -1e-6 ? (Math.sinh(Math.sqrt(-z)) - Math.sqrt(-z)) / Math.sqrt(-z) ** 3 : 1 / 6;
+function lambert(R1, R2, dt, m) { // universal variables, prograde, single revolution
+  const r1 = v3.norm(R1), r2 = v3.norm(R2); let th = Math.acos(Math.max(-1, Math.min(1, v3.dot(R1, R2) / (r1 * r2))));
+  if (v3.cross(R1, R2)[2] < 0) th = 2 * Math.PI - th;
+  const A = Math.sin(th) * Math.sqrt(r1 * r2 / (1 - Math.cos(th))); if (!isFinite(A) || Math.abs(A) < 1e-6) return null;
+  const y = z => r1 + r2 + A * (z * stS(z) - 1) / Math.sqrt(stC(z));
+  const F = z => { const yz = y(z); return yz < 0 ? -1e30 : Math.pow(yz / stC(z), 1.5) * stS(z) + A * Math.sqrt(yz) - Math.sqrt(m) * dt; };
+  let lo = -4 * Math.PI * Math.PI, hi = 4 * Math.PI * Math.PI * 0.999;
+  if (F(lo) > 0 || F(hi) < 0) return null;
+  for (let k = 0; k < 80; k++) { const mid = (lo + hi) / 2; if (F(mid) > 0) hi = mid; else lo = mid; }
+  const yz = y((lo + hi) / 2), f = 1 - yz / r1, g = A * Math.sqrt(yz / m), gd = 1 - yz / r2;
+  return { v1: v3.mul(v3.sub(R2, v3.mul(R1, f)), 1 / g), v2: v3.mul(v3.sub(v3.mul(R2, gd), R1), 1 / g) };
+}
+const escDv = (vinf, b) => { const rp = (RAD[b] + LOW[b]) * 1000, m = mu(b); return Math.sqrt(vinf * vinf + 2 * m / rp) - Math.sqrt(m / rp); };
+function exactWindow(from, to, t0) {
+  const a1 = ORB[from].a, a2 = ORB[to].a, th = Math.PI * Math.sqrt(((a1 + a2) / 2) ** 3 / MU_SUN);
+  const syn = 1 / Math.abs(1 / (2 * Math.PI * Math.sqrt(a1 ** 3 / MU_SUN)) - 1 / (2 * Math.PI * Math.sqrt(a2 ** 3 / MU_SUN)));
+  const brake = !!(B[to] && B[to].atm) && to !== 'Kerbin' ? 0.15 : 1; // air to aerobrake in: capture counts for little
+  const cost = (td, tof) => { const A0 = stateAt(from, td), B1 = stateAt(to, td + tof), L = lambert(A0.r, B1.r, tof, MU_SUN); if (!L) return null; const vi1 = v3.norm(v3.sub(L.v1, A0.v)), vi2 = v3.norm(v3.sub(L.v2, B1.v)); const ej = escDv(vi1, from), cap = escDv(vi2, to); return { td, tof, ej, cap, c: ej + cap * brake, vinfDir: v3.sub(L.v1, A0.v), pv: A0.v }; };
+  let best = null;
+  for (let i = 0; i <= 240; i++) for (let j = 0; j <= 20; j++) { const x = cost(t0 + syn * 1.05 * i / 240, th * (0.55 + 0.9 * j / 20)); if (x && (!best || x.c < best.c)) best = x; }
+  if (!best) return null;
+  let dT = syn * 1.05 / 240, dF = th * 0.045;
+  for (let pass = 0; pass < 4; pass++, dT /= 4, dF /= 4) { const c0 = best; for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) { const x = cost(Math.max(t0, c0.td + i * dT), c0.tof + j * dF); if (x && x.c < best.c) best = x; } }
+  const vinf = v3.norm(best.vinfDir), e = 1 + (RAD[from] + LOW[from]) * 1000 * vinf ** 2 / mu(from);
+  best.ejection = Math.acos(-1 / e) / D; best.outward = v3.dot(best.vinfDir, best.pv) > 0; best.syn = syn;
+  best.tilt = Math.asin(Math.max(-1, Math.min(1, best.vinfDir[2] / vinf))) / D; // how far out of the planet's orbit plane the escape points
+  return best;
+}
 // ---- KSP staging list from a design (stage numbers count down to 0, as in the game)
 function stagingOf(R) {
   const g = R.g, r = R.r, RG = O.ringsOf(g), n = g.stages.length, ev = [], bot = g.stages[n - 1];
@@ -1569,9 +1612,14 @@ function buildPlan(R, opt = {}) {
     if ((ORB[body].i || 0) > 1) S('Transfer', `Match ${body}'s orbit plane`, `${body} orbits ${ORB[body].i}° off the equator. Target ${body}, then burn normal or anti-normal at the ascending or descending node until the relative inclination is 0° (about 40–60 m/s).`, { dv: 50 });
     S('Transfer', `Transfer burn to ${body === 'Mun' ? 'the Mun' : body}`, `Burn prograde when ${body === 'Mun' ? 'the Mun' : body} is about ${deg(mt.phase)} ahead of you (it rises over the horizon ahead). About ${fmtN(dv || mt.dv)} m/s, until the map shows an encounter; tweak the node for a periapsis of about ${LOW[body] + 10} km. The trip takes about ${fmtN(mt.days, 1)} days.`, { dv: dv || mt.dv, stage: stg(`Transfer to ${body === 'Mun' ? 'the Mun' : body}`) });
   } else { // planets, and moons of other planets
-    const P = par(body) === 'Kerbol' ? body : par(body), w = planetWindow('Kerbin', P, t0), dv = dvOf('Escape Kerbin') + dvOf(`Transfer to ${P}`);
-    S('Transfer', `Wait for the ${P} window`, opt.date ? `Next window: ${tToDate(w.when).text} (${fmtN(w.wait / DAY)} days from ${tToDate(t0).text}). Windows come every ${fmtN(w.synodic / DAY)} days. At the window ${P} is ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin.` : `Set today's in-game date on the mission to get the window date. At the window, ${P} is ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.`, { when: opt.date ? tToDate(w.when).text : null });
-    S('Transfer', `Ejection burn to ${P}`, `From low Kerbin orbit, burn prograde when your ship is about ${deg(w.ejection)} from Kerbin's direction of travel, on the side ${w.outward ? 'facing away from' : 'facing'} the Sun. About ${fmtN(Math.max(dv, w.burn))} m/s. Drag the node until the Sun-orbit path touches ${P}'s orbit with an encounter. The cruise takes about ${fmtN(w.days)} days.${w.incl > 1 ? ` ${P}'s orbit is tilted ${fmtN(w.incl, 1)}°: do a small plane change halfway (at the node), usually 50–150 m/s.` : ''}`, { dv: Math.max(dv, w.burn), stage: stg('Escape Kerbin') });
+    const P = par(body) === 'Kerbol' ? body : par(body), w = planetWindow('Kerbin', P, t0), X = exactWindow('Kerbin', P, t0), dv = dvOf('Escape Kerbin') + dvOf(`Transfer to ${P}`);
+    if (X) {
+      S('Transfer', `Wait for the ${P} window`, `Best departure: ${tToDate(X.td).text}${opt.date ? ` (${fmtN((X.td - t0) / DAY)} days from ${tToDate(t0).text})` : ' (set today\'s date on the mission for the right window)'}. Arrives ${tToDate(X.td + X.tof).text}, ${fmtN(X.tof / DAY)} days later. Windows come every ${fmtN(X.syn / DAY)} days. At the window ${P} is about ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin.`, { when: tToDate(X.td).text, link: 'https://alexmoon.github.io/ksp/', linkText: 'Check in Launch Window Planner' });
+      S('Transfer', `Ejection burn to ${P}`, `From low Kerbin orbit, burn prograde when your ship is about ${deg(X.ejection)} from Kerbin's direction of travel, on the side ${X.outward ? 'facing away from' : 'facing'} the Sun: ${fmtN(X.ej)} m/s${Math.abs(X.tilt) > 2 ? `, aimed about ${fmtN(Math.abs(X.tilt))}° ${X.tilt > 0 ? 'north' : 'south'} of Kerbin's orbit (burn a little normal${X.tilt > 0 ? '' : ' anti-normal'})` : ''}. Drag the node until the map shows a ${P} encounter.${X.ej > dv * 1.15 ? ` That's more than the Δv map's ${fmtN(dv)} m/s this craft was sized for: pick a later window if you can.` : ''}`, { dv: X.ej, stage: stg('Escape Kerbin') });
+    } else {
+      S('Transfer', `Wait for the ${P} window`, `At the window, ${P} is ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.${opt.date ? ` Next: ${tToDate(w.when).text}.` : ''}`, { when: opt.date ? tToDate(w.when).text : null });
+      S('Transfer', `Ejection burn to ${P}`, `From low Kerbin orbit, burn prograde when your ship is about ${deg(w.ejection)} from Kerbin's direction of travel, on the side ${w.outward ? 'facing away from' : 'facing'} the Sun. About ${fmtN(Math.max(dv, w.burn))} m/s.`, { dv: Math.max(dv, w.burn), stage: stg('Escape Kerbin') });
+    }
     S('Transfer', 'Mid-course correction', `About halfway, fine-tune with a small burn (normally under 50 m/s) so the periapsis at ${P} is where you want it (${B[P].atm ? `about ${fmtN(Math.round(LOW[P] * 0.6))} km to aerobrake, or ${LOW[P] + 20} km to capture with engines` : `about ${LOW[P] + 10} km`}).`, { dv: 30 });
     if (par(body) !== 'Kerbol') {
       S('Arrival', `Capture at ${P}`, `At periapsis, burn retrograde about ${fmtN(dvOf(`Capture at ${P}`))} m/s into a long elliptical orbit.`, { dv: dvOf(`Capture at ${P}`), stage: stg(`Capture at ${P}`) });
@@ -1608,9 +1656,9 @@ function buildPlan(R, opt = {}) {
     const the = body === 'Mun' ? 'the Mun' : body, leave = dvOf(`Leave ${the}`);
     if (par(body) === 'Kerbin') S('Return', 'Burn for home', `From low orbit, burn prograde on the side of ${the} facing away from its direction of travel around Kerbin (about ${fmtN(leave)} m/s) until your Kerbin periapsis is about 30 km.`, { dv: leave, stage: stg(`Leave ${the}`) });
     else {
-      const P = par(body) === 'Kerbol' ? body : par(body), w = planetWindow(P, 'Kerbin', t0);
-      S('Return', 'Wait for the window home', `Kerbin must be ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} ${P} around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.`);
-      S('Return', 'Burn for home', `Burn prograde when your ship is about ${deg(w.ejection)} from ${P}'s direction of travel, on the side ${w.outward ? 'facing away from' : 'facing'} the Sun: about ${fmtN(leave + dvOf('Transfer to Kerbin'))} m/s. Adjust for a Kerbin periapsis of about 30 km.`, { dv: leave + dvOf('Transfer to Kerbin'), stage: stg(`Leave ${the}`) });
+      const P = par(body) === 'Kerbol' ? body : par(body), w = planetWindow(P, 'Kerbin', t0), Xo = exactWindow('Kerbin', P, t0), Xr = Xo ? exactWindow(P, 'Kerbin', Xo.td + Xo.tof + 5 * DAY) : null;
+      S('Return', 'Wait for the window home', Xr ? `Earliest good departure after you arrive: ${tToDate(Xr.td).text}, home ${tToDate(Xr.td + Xr.tof).text} (${fmtN(Xr.tof / DAY)} days). Plan surface time around it.` : `Kerbin must be ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} ${P} around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.`, { when: Xr ? tToDate(Xr.td).text : null, link: 'https://alexmoon.github.io/ksp/', linkText: 'Check in Launch Window Planner' });
+      S('Return', 'Burn for home', `Burn prograde when your ship is about ${deg(Xr ? Xr.ejection : w.ejection)} from ${P}'s direction of travel, on the side ${(Xr ? Xr.outward : w.outward) ? 'facing away from' : 'facing'} the Sun: about ${fmtN(Xr && P === body ? Xr.ej : leave + dvOf('Transfer to Kerbin'))} m/s. Adjust for a Kerbin periapsis of about 30 km.`, { dv: Xr && P === body ? Xr.ej : leave + dvOf('Transfer to Kerbin'), stage: stg(`Leave ${the}`) });
     }
   }
   if (G.ret || (body === 'Kerbin' && G.lands)) {
@@ -1623,7 +1671,7 @@ function buildPlan(R, opt = {}) {
   }
   return steps.map((s, i) => Object.assign(s, { i }));
 }
-const api = { buildPlan, stagingOf, moonTransfer, planetWindow, dateToT, tToDate, ORB, RAD, LOW };
+const api = { exactWindow, stateAt, lambert, buildPlan, stagingOf, moonTransfer, planetWindow, dateToT, tToDate, ORB, RAD, LOW };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PLAN = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -2126,13 +2174,21 @@ function planHtml(m, steps) {
   const Rm = resultOf(m, m.pick);
   let h = Rm.r.ok ? '' : `<div class="verdict bad"><b>This craft falls short</b>${esc(m.hint || 'See the Craft tab for what is wrong, then design again.')}</div>`;
   h += `<div class="prog"><i style="width:${n ? d / n * 100 : 0}%"></i></div><p class="note" style="margin:0 0 10px">${d} of ${n} steps done. Tap a step when you've done it.</p>`;
-  if (next) h += `<div class="next"><div class="lab">Next · ${esc(next.phase)}</div><b>${esc(next.title)}</b><div>${esc(next.detail)}</div><div class="tags">${next.dv ? `<span class="tag dv">${fmt(next.dv)} m/s</span>` : ''}${next.stage !== undefined && next.stage !== '' ? `<span class="tag st">${typeof next.stage === 'number' ? 'Stage ' + next.stage : esc(next.stage)}</span>` : ''}${next.when ? `<span class="tag">${esc(next.when)}</span>` : ''}</div><button class="btn small" data-step="${next.i}" style="margin-top:10px">Done</button></div>`;
+  if (next) h += `<div class="next"><div class="lab">Next · ${esc(next.phase)}</div><b>${esc(next.title)}</b><div>${esc(next.detail)}</div><div class="tags">${next.dv ? `<span class="tag dv">${fmt(next.dv)} m/s</span>` : ''}${next.stage !== undefined && next.stage !== '' ? `<span class="tag st">${typeof next.stage === 'number' ? 'Stage ' + next.stage : esc(next.stage)}</span>` : ''}${next.when ? `<span class="tag">${esc(next.when)}</span>` : ''}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn small" data-step="${next.i}">Done</button>${next.link ? `<button class="btn small" data-url="${esc(next.link)}">${esc(next.linkText || 'Open tool')} ↗</button>` : ''}</div></div>`;
   else h += `<div class="verdict ok"><b>Mission complete</b>Every step is ticked.</div>`;
   let ph = null;
   for (const s of steps) {
     if (s.phase !== ph) { ph = s.phase; h += `<div class="ph">${esc(ph)}</div>`; }
     h += `<button class="step ${done[s.i] ? 'done' : ''} ${next && s.i === next.i ? 'cur' : ''}" data-step="${s.i}"><span class="bx">${done[s.i] ? '✓' : s.i + 1}</span><span><b>${esc(s.title)}</b><span class="d">${esc(s.detail)}</span><span class="tags">${s.dv ? `<span class="tag dv">${fmt(s.dv)} m/s</span>` : ''}${s.stage !== undefined && s.stage !== '' ? `<span class="tag st">${typeof s.stage === 'number' ? 'Stage ' + s.stage : esc(s.stage)}</span>` : ''}${s.when ? `<span class="tag">${esc(s.when)}</span>` : ''}</span></span></button>`;
   }
+  const planet = steps.some(x => /window/i.test(x.title));
+  const tools = [
+    planet && ['Launch Window Planner', 'https://alexmoon.github.io/ksp/', 'Porkchop plot of every departure date. The plan above uses the same method.'],
+    planet && ['KSP MGA Planner', 'https://krafpy.github.io/KSP-MGA-Planner/', 'Gravity-assist routes (e.g. via Eve) that save Δv on far trips.'],
+    ['KSP Visual Calculator', 'https://ksp-visual-calculator.blaarkies.com/', 'Δv map between any two bodies, and relay coverage.'],
+    ['Resonant orbit calculator', 'https://mjungnickel18.github.io/korc/', 'Spacing satellites evenly in one orbit.'],
+  ].filter(Boolean);
+  h += `<div class="card" style="margin-top:14px"><h3>Fine-tune with the wiki's calculators</h3>${tools.map(t => `<button class="step" data-url="${t[1]}" style="grid-template-columns:minmax(0,1fr)"><span><b>${t[0]} ↗</b><span class="d note">${t[2]}</span></span></button>`).join('')}</div>`;
   return h + `<button class="btn" data-reset style="margin-top:8px">Start the checklist over</button>`;
 }
 $('v-mission').addEventListener('click', e => {
@@ -2141,6 +2197,7 @@ $('v-mission').addEventListener('click', e => {
   if (e.target.closest('[data-del]')) { if (confirm('Delete this mission?')) { st.missions = st.missions.filter(x => x.id !== m.id); save(); go('missions'); } return; }
   const t = e.target.closest('[data-mtab]'); if (t) { st.mtab = t.dataset.mtab; save(); renderMission(); return; }
   const p = e.target.closest('[data-pick]'); if (p) { m.pick = +p.dataset.pick; m.optLabel = OBN[m.opts[m.pick].ob]; m.done = {}; save(); renderMission(); return; }
+  const u = e.target.closest('[data-url]'); if (u) { const url = u.dataset.url; if (AB && AB.openUrl) AB.openUrl(url); else window.open(url, '_blank', 'noopener'); return; }
   const s = e.target.closest('[data-step]'); if (s) { const i = +s.dataset.step; m.done = m.done || {}; if (m.done[i]) delete m.done[i]; else m.done[i] = 1; save(); const y = $('main').scrollTop; renderMission(); $('main').scrollTop = y; return; }
   if (e.target.closest('[data-reset]')) { m.done = {}; save(); renderMission(); }
 });
