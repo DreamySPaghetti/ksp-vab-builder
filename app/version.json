@@ -1,8 +1,8 @@
 {
-  "web": 31,
+  "web": 32,
   "apk": 3,
-  "sha256": "6f25040590219817df7626ea130a8a9bffe3bb8eee990d9534b3b11f98f2787a",
-  "notes": "Space stations: pick modules (cabins, labs, cupola), the app adds docking ports, solar panels, batteries and RCS, splits it over launches and plans the docking order. Mods: MechJeb ascent settings and rendezvous/docking steps, Kerbal Engineer stage readout, launch scored with a drag simulation.",
+  "sha256": "fd0147d82cf07c3495efa7e09818b7ebe03aabce4a4812c575db74aab673a75f",
+  "notes": "Your mods: Making History engines and tanks, Near Future Construction docking connectors and hubs, Planetary Base Systems modules, reactor and legs, KAS joints and bracing, DPAI docking steps. New surface base mission. Switch mods off in Career \u2192 Installed mods.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

@@ -145,6 +145,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
     <section id="tab-career" hidden>
       <div class="seg" role="group" aria-label="Game mode"><button type="button" data-mode="sandbox">Sandbox (every part)</button><button type="button" data-mode="career">Career</button></div>
       <div id="careerBody"></div>
+      <div class="card" id="modCard"></div>
     </section>
     <section id="tab-goal" hidden>
       <div class="card"><h3>Goal</h3><div class="row" style="flex-wrap:nowrap"><select id="dest" aria-label="Destination"></select><select id="mission" aria-label="Mission"></select></div><div id="airBox" hidden style="margin-top:8px;display:grid;gap:8px"></div><div id="stnBox" hidden style="margin-top:8px"></div><p class="note" id="goalDv" style="margin:8px 0 0"></p>
@@ -347,7 +348,7 @@ leg('ly60', 'LY-60 Large Landing Gear', 0.45, 1500, { gear: true, a: 1 });
 // space station parts (KSP wiki figures; ≈ where estimated). stn: hab | port | power | battery | rcs | mono
 const stn = (id, t, m, c, d, h, kind, o = {}) => add('Station', id, t, Object.assign({ m, dry: m, $: c, d, h, stn: kind }, o));
 stn('hitchhiker', 'PPD-10 Hitchhiker Storage Container', 2.5, 3500, 2.5, 1.9, 'hab', { crew: 4, tech: 'Space Exploration' });
-stn('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.8, 'hab', { crew: 2, lab: true, ec: 1.5, tech: 'Advanced Exploration', a: 1 });
+stn('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.8, 'hab', { crew: 2, lab: true, ec: 5, tech: 'Advanced Exploration', a: 1 });
 stn('cupola', 'PPD-12 Cupola Module', 4.5, 3200, 1.25, 1.5, 'hab', { crew: 1, tech: 'Advanced Exploration', a: 1 });
 stn('mk1cabin', 'Mk1 Crew Cabin', 0.65, 600, 1.25, 1.9, 'hab', { crew: 2, tech: 'Aviation', a: 1 });
 stn('portJr', 'Clamp-O-Tron Jr. Docking Port', 0.02, 280, 0.625, 0.2, 'port', { tech: 'Precision Engineering' });
@@ -372,6 +373,71 @@ stn('fr25', 'FL-R25 RCS Fuel Tank', 0.75, 600, 1.25, 0.5, 'mono', { dry: 0.15, m
 stn('fr1', 'FL-R1 RCS Fuel Tank', 3.4, 1300, 2.5, 1, 'mono', { dry: 0.4, mono: 750, tech: 'Specialized Control', a: 1 });
 stn('stratR', 'Stratus-V Roundified Monopropellant Tank', 0.2, 200, 'r', 0, 'mono', { dry: 0.04, mono: 40, tech: 'Advanced Flight Control', a: 1 });
 stn('stratC', 'Stratus-V Cylindrified Monopropellant Tank', 0.375, 300, 'r', 0, 'mono', { dry: 0.075, mono: 75, tech: 'Specialized Control', a: 1 });
+// ---- mods and DLC from your GameData. mod: which one (switch them off in Career → Installed mods).
+// Mod part figures come from each mod's own part configs on GitHub (dry mass, cost, crew, resources, docking node
+// type, tech node); heights and the Making History costs and tech nodes are estimates (≈). Making History engines:
+// mass, vacuum thrust and Isp curves from the game's configs as collected in meithan/engine_charts.
+const modded = (tag, fn) => { const n0 = P.length; fn(); for (let i = n0; i < P.length; i++) P[i].mod = tag; };
+// port types: two ports dock only if their node types match (stock size0/size1/size2, NFC size4 and linear)
+for (const [id, pt] of [['portJr', 'size0'], ['port', 'size1'], ['portIn', 'size1'], ['portSh', 'size1'], ['portSr', 'size2']]) P.find(p => p.id === id).pt = pt;
+modded('mh', () => { // Making History (stock DLC): 1.875 m engines and tanks
+  const e2 = (id, t, m, c, tv, ia, iv, d, h, gim, tech) => eng(id, t, m, c, +(tv * ia / iv).toFixed(1), tv, ia, iv, d, h, { a: 1, g0: gim, tech });
+  e2('mastodon', 'KE-1 "Mastodon"', 5, 22000, 1350, 290, 305, 1.875, 2.6, 5, 'Heavier Rocketry');
+  e2('cheetah', 'LV-T91 "Cheetah"', 1, 850, 125, 150, 355, 1.25, 1.2, 3, 'Propulsion Systems');
+  e2('bobcat', 'LV-TX87 "Bobcat"', 2, 2000, 400, 290, 310, 1.875, 1.8, 5, 'Heavy Rocketry');
+  e2('skiff', 'RE-I2 "Skiff"', 1.6, 1600, 300, 265, 330, 1.875, 1.6, 2, 'Heavier Rocketry');
+  e2('wolfhound', 'RE-J10 "Wolfhound"', 3.3, 2000, 375, 70, 380, 1.875, 2.0, 3, 'Very Heavy Rocketry');
+  e2('kodiak', 'RK-7 "Kodiak"', 1.25, 1300, 260, 285, 300, 1.25, 1.2, 0, 'General Rocketry');
+  for (const [id, u, h, tech] of [['tx220', 220, 0.47, 'Fuel Systems'], ['tx440', 440, 0.94, 'Fuel Systems'], ['tx900', 900, 1.875, 'Adv. Fuel Systems'], ['tx1800', 1800, 3.75, 'Adv. Fuel Systems']]) {
+    const lf = u * 0.45, ox = u * 0.55, dry = u * 0.005 / 8; tank(id, `FL-TX${u} Fuel Tank`, +(dry + u * 0.005).toFixed(4), +dry.toFixed(4), lf, ox, Math.round(u * 1.6), 1.875, h, { a: 1, tech });
+  }
+  dec('td18', 'TD-18 Decoupler', 0.12, 650, 1.875, { tech: 'General Construction' });
+  adp('a151', 'FL-A151L Fuel Tank Adapter', 0.15, 400, 1.25, 1.875, 0.6); adp('a215', 'FL-A215 Fuel Tank Adapter', 0.2, 500, 1.875, 2.5, 0.6);
+  P[P.length - 1].tech = P[P.length - 2].tech = 'General Construction';
+});
+modded('nfc', () => { // Near Future Construction: docking connectors, hubs, the octo-girder probe core, skeletal adapters
+  stn('nfcDock125', 'Octo-Girder Docking Connector', 0.15, 1200, 1.25, 0.4, 'port', { pt: 'size1', tech: 'Meta-Materials' });
+  stn('nfcDock25', 'Octo-Girder Heavy Docking Connector', 0.3, 1400, 2.5, 0.5, 'port', { pt: 'size2', tech: 'Meta-Materials' });
+  stn('nfcDock5', 'Annular Truss Docking Connector', 0.65, 2200, 5, 0.6, 'port', { pt: 'size4', tech: 'Meta-Materials' });
+  stn('nfcLinear', 'Grip-O-Tron Linear Docking Connector', 0.1, 2500, 'r', 0, 'port', { pt: 'linear1', tech: 'Meta-Materials' });
+  stn('nfcHub', 'Octo-Girder Modular Hub', 0.5, 800, 1.25, 1.2, 'hub', { hubPorts: 6, tech: 'Nanolathing' });
+  stn('nfcHubCrew', 'Octo-Girder Pressurized Hub', 0.9, 1600, 1.25, 1.2, 'hub', { hubPorts: 6, tech: 'Nanolathing' });
+  cmd('nfcDrone', 'Octo-Girder Guidance Unit', 0.65, 4500, 1.25, 0.6, { probe: true, tech: 'Large Probes' });
+  adp('nfcAdp25', 'Rockomax Skeletal Structural Adapter', 0.05, 350, 1.25, 2.5, 0.8); P[P.length - 1].tech = 'Advanced Construction';
+  adp('nfcAdp375', 'Rockomax Skeletal XL Structural Adapter', 0.125, 1800, 2.5, 3.75, 1.0); P[P.length - 1].tech = 'Nanolathing';
+});
+modded('kpbs', () => { // Planetary Base Systems: habitats, lab, greenhouse, hub, reactor, containers, corridors, legs
+  const k = (id, t, m, c, h, kind, o) => stn(id, t, m, c, 2.5, h, kind, Object.assign({ a: 1 }, o)); // K&K modules are about 2.5 m across
+  k('kpbsHab1', 'K&K Planetary Habitat MK1', 1.7, 840, 2.0, 'hab', { crew: 3, bat: 150, tech: 'Advanced Exploration' });
+  k('kpbsHab2', 'K&K Planetary Habitat MK2', 2.6, 1200, 2.6, 'hab', { crew: 4, bat: 200, tech: 'Field Science' });
+  k('kpbsGreen', 'K&K Planetary Greenhouse', 3.0, 6100, 2.4, 'hab', { crew: 2, tech: 'Scanning Tech' });
+  k('kpbsLab', 'K&K Planetary Laboratory', 3.55, 4200, 2.4, 'hab', { crew: 2, lab: true, ec: 5, tech: 'Advanced Exploration' });
+  k('kpbsHub', 'K&K Planetary Central Hub', 7.5, 10000, 3.0, 'hab', { crew: 6, lab: true, ec: 4, bat: 150, control: true, hubPorts: 6, tech: 'Meta-Materials' });
+  k('kpbsCupola', 'K&K Planetary Cupola', 1.75, 3300, 1.6, 'hab', { crew: 1, bat: 150, control: true, tech: 'Command Modules' });
+  k('kpbsControl', 'K&K Planetary Command Module', 2.0, 2400, 2.0, 'hab', { crew: 2, bat: 150, control: true, tech: 'Command Modules' });
+  k('kpbsAirlock', 'K&K Airlock', 0.13, 450, 0.8, 'hab', { crew: 1, tech: 'Advanced Construction' });
+  stn('kpbsReactor', 'K&K Nuclear Reactor', 0.6 + 250 * 0.005, 430000, 'r', 0, 'power', { ecGen: 1350, rtg: true, bat: 800, tech: 'Very Heavy Rocketry', a: 1 });
+  stn('kpbsBattery', 'K&K Z-3K Battery Container', 0.35, 3900, 'r', 0, 'battery', { bat: 3500, tech: 'High-Power Electrics' });
+  stn('kpbsRcs', 'K&K RCS-Fuel Container', 0.26 + 350 * 0.004, 840, 'r', 0, 'mono', { dry: 0.26, mono: 350, tech: 'Adv. Fuel Systems' });
+  stn('kpbsDock', 'K&K Docking-Port', 0.1, 780, 1.25, 0.3, 'port', { pt: 'size1', tech: 'Unmanned Tech' });
+  stn('kpbsCorrDock', 'K&K Corridor Docking-Port', 0.06, 300, 1.25, 0.3, 'port', { pt: 'size1', ground: true, tech: 'Advanced MetalWorks' });
+  stn('kpbsCorr4', 'K&K 4-ended modular Corridor', 0.17, 300, 1.25, 1.2, 'hub', { hubPorts: 4, tech: 'Composites' });
+  stn('kpbsCorr6', 'K&K 6-ended modular Corridor', 0.17, 400, 1.25, 1.2, 'hub', { hubPorts: 6, tech: 'Meta-Materials' });
+  stn('kpbsTri', 'K&K Base Tri-Coupler', 0.3, 750, 2.5, 1.0, 'hub', { hubPorts: 3, tech: 'Meta-Materials', a: 1 });
+  leg('kpbsBigfoot', 'K&K "Bigfoot" Low Profile Landing-Leg', 0.08, 400, { tech: 'Landing' });
+  leg('kpbsLilBigfoot', 'K&K "Little Bigfoot" Underside Landing-Leg', 0.075, 450, { tech: 'Advanced Landing' });
+  eng('meerkat', 'K&K LV25 "Meerkat" Landing Assist', 0.8, 970, 65.6, 75, 280, 320, 'r', 0.5, { dry: 0.3, lf: 45, ox: 55, g0: 2, tech: 'Advanced Landing' });
+  tank('kpbsX360', 'K&K X360 Small Fuel Tank', 4.6, 0.6, 360, 440, 1000, 2.5, 1.2, { a: 1, tech: 'Fuel Systems' });
+  tank('kpbsX720', 'K&K X720 Fuel Tank', 9.1, 1.1, 720, 880, 2000, 2.5, 2.2, { a: 1, tech: 'Fuel Systems' });
+});
+modded('kas', () => { // Kerbal Attachment System: joints, struts and pipes an engineer connects on EVA
+  stn('kasTJ1', 'TJ-1 Fixed Telescopic Joint', 0.08, 750, 'r', 0, 'kas', { kas: 'brace', tech: 'Advanced Construction' });
+  stn('kasTJ2', 'TJ-2 Free Telescopic Joint', 0.08, 750, 'r', 0, 'kas', { kas: 'join', tech: 'Specialized Construction' });
+  stn('kasPCB1', 'PCB-1 Portable Cable Bracing', 0.02, 750, 'r', 0, 'kas', { kas: 'brace', tech: 'Specialized Construction' });
+  stn('kasJS1', 'JS-1 Joint Socket', 0.008, 750, 'r', 0, 'kas', { kas: 'socket', tech: 'Advanced Construction' });
+  stn('kasRTS1', 'RTS-1 Resource Transfer Station', 0.1, 1200, 'r', 0, 'kas', { kas: 'pipe', tech: 'Adv. Fuel Systems' });
+  stn('kasW50', 'W-50 Winch', 0.01, 1200, 'r', 0, 'kas', { kas: 'winch', tech: 'Actuators' });
+});
 // Stock tech tree (KSP wiki, Technology tree page): [name, tier, science cost, required nodes, any one of them (1) or all (0)]
 const TECH = [["Start",1,0,[],1],["Basic Rocketry",2,5,["Start"],1],["Engineering 101",2,5,["Start"],1],["Survivability",3,15,["Engineering 101"],1],["Stability",3,18,["Engineering 101","Basic Rocketry"],1],["General Rocketry",3,20,["Basic Rocketry"],1],["Aviation",4,45,["Stability"],1],["Basic Science",4,45,["Survivability"],1],["Flight Control",4,45,["Survivability","Stability"],1],["Advanced Rocketry",4,45,["General Rocketry"],1],["General Construction",4,45,["Stability","General Rocketry"],1],["Propulsion Systems",5,90,["Advanced Rocketry"],1],["Space Exploration",5,90,["Basic Science"],1],["Advanced Flight Control",5,90,["Flight Control"],1],["Landing",5,90,["Flight Control","Aviation"],1],["Aerodynamics",5,90,["Aviation","General Construction"],1],["Electrics",5,90,["Basic Science"],1],["Heavy Rocketry",5,90,["Advanced Rocketry"],1],["Fuel Systems",5,90,["Advanced Rocketry","General Construction"],1],["Advanced Construction",5,90,["General Construction"],1],["Miniaturization",5,90,["Basic Science"],1],["Actuators",6,160,["Advanced Construction"],1],["Command Modules",6,160,["Space Exploration","Advanced Flight Control"],1],["Heavier Rocketry",6,160,["Heavy Rocketry"],1],["Precision Engineering",6,160,["Miniaturization","Electrics"],1],["Advanced Exploration",6,160,["Space Exploration"],1],["Specialized Control",6,160,["Advanced Flight Control"],1],["Advanced Landing",6,160,["Landing"],1],["Supersonic Flight",6,160,["Aerodynamics"],1],["Adv. Fuel Systems",6,160,["Propulsion Systems","Fuel Systems"],1],["Advanced Electrics",6,160,["Electrics"],1],["Specialized Construction",6,160,["Advanced Construction"],1],["Precision Propulsion",6,160,["Propulsion Systems"],1],["Advanced Aerodynamics",6,160,["Aerodynamics"],1],["Heavy Landing",7,300,["Advanced Landing"],1],["Scanning Tech",7,300,["Advanced Exploration","Precision Engineering"],1],["Unmanned Tech",7,300,["Precision Engineering"],1],["Nuclear Propulsion",7,300,["Adv. Fuel Systems","Heavier Rocketry"],0],["Advanced MetalWorks",7,300,["Specialized Construction"],1],["Field Science",7,300,["Advanced Landing","Advanced Exploration"],1],["High Altitude Flight",7,300,["Supersonic Flight"],1],["Large Volume Containment",7,300,["Adv. Fuel Systems","Specialized Construction"],1],["Composites",7,300,["Specialized Construction"],1],["Electronics",7,300,["Precision Engineering","Advanced Electrics"],1],["High-Power Electrics",7,300,["Advanced Electrics"],1],["Heavy Aerodynamics",7,300,["Advanced Aerodynamics"],1],["Ion Propulsion",8,550,["Scanning Tech","Unmanned Tech"],0],["Hypersonic Flight",8,550,["High Altitude Flight"],1],["Nanolathing",8,550,["Advanced MetalWorks"],1],["Advanced Unmanned Tech",8,550,["Unmanned Tech"],1],["Meta-Materials",8,550,["Composites"],1],["Very Heavy Rocketry",8,550,["Large Volume Containment","Heavier Rocketry"],1],["Advanced Science Tech",8,550,["Scanning Tech","Field Science"],1],["Advanced Motors",8,550,["Field Science"],1],["Specialized Electrics",8,550,["High-Power Electrics"],1],["High-Performance Fuel Systems",8,550,["Large Volume Containment"],1],["Experimental Aerodynamics",8,550,["Heavy Aerodynamics"],1],["Automation",8,550,["Unmanned Tech","Electronics"],1],["Aerospace Tech",9,1000,["Hypersonic Flight"],1],["Large Probes",9,1000,["Advanced Unmanned Tech","Automation"],1],["Experimental Science",9,1000,["Advanced Science Tech"],1],["Experimental Motors",9,1000,["Advanced Motors"],1],["Experimental Electrics",9,1000,["Specialized Electrics"],1]];
 const PART_TECH = {"mk1pod":"Start","mk1-3pod":"Command Modules","landerSmall":"Advanced Flight Control","landerMk2":"Command Modules","cockpitMk2":"Supersonic Flight","cockpitMk3":"Heavy Aerodynamics","hecs2":"Advanced Unmanned Tech","mk2drone":"Automation","oscarB":"Propulsion Systems","flt100":"Basic Rocketry","flt200":"General Rocketry","flt400":"Advanced Rocketry","flt800":"Fuel Systems","x200-8":"Fuel Systems","x200-16":"Fuel Systems","x200-32":"Fuel Systems","jumbo64":"Adv. Fuel Systems","s3-3600":"Large Volume Containment","s3-7200":"Large Volume Containment","s3-14400":"High-Performance Fuel Systems","r4":"Precision Propulsion","r11":"Propulsion Systems","r12":"Precision Propulsion","mk2lfoS":"Supersonic Flight","mk3lfoS":"Experimental Aerodynamics","mk3lfo":"Experimental Aerodynamics","mk3lfoL":"Experimental Aerodynamics","mk2lfS":"Supersonic Flight","mk3lfS":"Heavy Aerodynamics","mk3lfL":"Experimental Aerodynamics","ncs":"Aerodynamics","spider":"Precision Propulsion","twitch":"Precision Propulsion","thud":"Advanced Rocketry","ant":"Propulsion Systems","spark":"Propulsion Systems","terrier":"Advanced Rocketry","reliant":"General Rocketry","swivel":"Basic Rocketry","vector":"Very Heavy Rocketry","dart":"Hypersonic Flight","nerv":"Nuclear Propulsion","poodle":"Heavy Rocketry","skipper":"Heavy Rocketry","mainsail":"Heavier Rocketry","twinboar":"Heavier Rocketry","rhino":"Very Heavy Rocketry","mammoth":"Very Heavy Rocketry","puff":"Precision Propulsion","rapier":"Aerospace Tech","shrimp":"Precision Propulsion","mite":"Propulsion Systems","flea":"Start","hammer":"Basic Rocketry","thumper":"General Rocketry","kickback":"Heavy Rocketry","thoroughbred":"Heavier Rocketry","clydesdale":"Very Heavy Rocketry","panther":"Supersonic Flight","whiplash":"Hypersonic Flight","goliath":"Heavy Aerodynamics","circularS":"Aviation","ramp":"High Altitude Flight","shockcone":"Hypersonic Flight","xmg50":"Aerodynamics","dsi":"High Altitude Flight","precooler":"Hypersonic Flight","connA":"Aerodynamics","connB":"Aviation","connD":"Advanced Aerodynamics","deltaS":"Advanced Aerodynamics","structA":"Supersonic Flight","structD":"Advanced Aerodynamics","sweptA":"Advanced Aerodynamics","swept":"Aviation","bigSdelta":"Experimental Aerodynamics","bigSstrake":"Experimental Aerodynamics","fat455":"Heavy Aerodynamics","elevon1":"Aviation","elevon3":"Advanced Aerodynamics","elevon5":"Advanced Aerodynamics","bigSelevon1":"Experimental Aerodynamics","bigSelevon2":"Experimental Aerodynamics","canard":"Advanced Aerodynamics","canardAdv":"Hypersonic Flight","fat455tail":"Heavy Aerodynamics","bigStail":"Experimental Aerodynamics","basicfin":"Start","avt1":"Stability","avr8":"Flight Control","deltadeluxe":"Flight Control","noseCone":"Stability","noseConeS":"Aerodynamics","noseCone25":"Advanced Construction","td06":"Precision Engineering","td12":"Engineering 101","td25":"General Construction","td37":"Large Volume Containment","tt38k":"Stability","tt70":"Advanced Construction","fla10":"Miniaturization","kerbodyneAdp":"Large Volume Containment","mk3to25":"Heavy Aerodynamics","mk3toMk2":"Experimental Aerodynamics","mk16":"Start","mk16xl":"Landing","mk2r":"Survivability","mk25":"Advanced Landing","mk12r":"Survivability","hs125":"Survivability","hs25":"Landing","lt05":"Survivability","lt1":"Landing","lt2":"Advanced Landing","ly10":"Landing","ly35":"Advanced Landing","ly60":"Heavy Landing","cockpitMk1":"Aviation","juno":"Aviation","mk0lf":"Aviation","mk1lf":"Aviation","connE":"Aviation","structC":"Aviation","ly01":"Aviation","ly05":"Aviation","tailfin":"Aviation","cockpitMk1i":"Aerodynamics","wheesley":"Aerodynamics","nacelle":"Aerodynamics","connC":"Aerodynamics","structB":"Aerodynamics","sweptB":"Aerodynamics","circular":"Aerodynamics","okto":"Electrics","hecs":"Precision Engineering","rc001s":"Advanced Unmanned Tech","rcl01":"Large Probes","mk2lfo":"High Altitude Flight","mk2lf":"High Altitude Flight","mk3lf":"Heavy Aerodynamics","delta":"Advanced Aerodynamics","strake":"Supersonic Flight","elevon2":"Advanced Aerodynamics","rockomaxAdp":"General Construction","mk2to125":"Supersonic Flight"};
@@ -401,7 +467,8 @@ sci('comm16', 'Communotron 16', 0.005, 300, 'r', 0.6, 'Engineering 101');
 const GIMBAL = { spider: 10, twitch: 8, thud: 8, ant: 0, spark: 3, terrier: 4, reliant: 0, swivel: 3, vector: 10.5, dart: 0, nerv: 1, poodle: 4.5, skipper: 2, mainsail: 2, twinboar: 1.5, rhino: 4, mammoth: 1, puff: 6, rapier: 3, thoroughbred: 2.5, clydesdale: 2.5 };
 // reaction-wheel torque (kN·m, KSP wiki Reaction wheel page)
 const TORQUE = { mk1pod: 5, 'mk1-3pod': 15, landerSmall: 3, landerMk2: 15, cockpitMk1: 10, cockpitMk1i: 10, cockpitMk2: 15, cockpitMk3: 40, okto: 0.3, hecs: 0.5, hecs2: 10, rc001s: 0.5, rcl01: 1.5, mk2drone: 15 };
-for (const p of P) { if (p.ta != null) p.gimbal = GIMBAL[p.id] || 0; if (p.cmd) p.torque = TORQUE[p.id] || 0; }
+for (const p of P) { if (p.ta != null) p.gimbal = p.g0 != null ? p.g0 : GIMBAL[p.id] || 0; if (p.cmd) p.torque = TORQUE[p.id] || 0; }
+Object.assign(TORQUE, { nfcDrone: 25 }); for (const p of P) if (p.id === 'nfcDrone') p.torque = 25;
 const BY = Object.fromEntries(P.map(p => [p.id, p]));
 const api = { PARTS: P, BY, TECH, BUILD };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PARTS = api;
@@ -442,7 +509,7 @@ const BODY = {
   Eeloo: { parent: 'Kerbol', int: 1140, cap: 0, low: 1370, land: 620, g: 1.69 },
 };
 const KERBIN_ESCAPE = 950;
-const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return', station: 'space station' };
+const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return', station: 'space station', base: 'surface base' };
 const esc0 = s => String(s);
 // ---- science (stock values as listed on the KSP wiki's science pages): experiment base value, where it works,
 // and how much a transmission is worth compared to bringing the data home
@@ -495,7 +562,7 @@ function phasesOf(goal) {
   if (mis === 'flyby') return out.filter(p => p.dv > 0);
   if (B.cap) out.push({ k: 'orbit', name: `Capture at ${the(b)}`, dv: B.cap, body: b });
   out.push({ k: 'orbit', name: `Low orbit at ${the(b)}`, dv: B.low, body: b });
-  const lands = mis === 'land' || mis === 'landReturn';
+  const lands = mis === 'land' || mis === 'landReturn' || mis === 'base';
   if (lands && B.land != null) out.push({ k: 'land', name: `Landing on ${the(b)}`, dv: B.descent != null ? B.descent : B.land, body: b, atm: B.atm || 0, chute: B.descent != null });
   if (mis === 'landReturn' || mis === 'orbitReturn') {
     if (mis === 'landReturn' && B.land != null) out.push({ k: 'ascent', name: `Ascent from ${the(b)}`, dv: B.land, body: b, atm: B.atm || 0 });
@@ -507,7 +574,7 @@ function phasesOf(goal) {
   return out.filter(p => p.dv > 0);
 }
 const goalName = goal => { const [b, m] = goal.split(':'); return b === 'Kerbin' ? (m === 'station' ? 'Kerbin space station' : 'Low Kerbin orbit') : `${b} ${MISSIONS[m]}`; };
-const goalInfo = goal => { const [b, m] = goal.split(':'); return { body: b, mission: m, ret: m === 'landReturn' || m === 'orbitReturn', lands: m === 'land' || m === 'landReturn', name: goalName(goal) }; };
+const goalInfo = goal => { const [b, m] = goal.split(':'); return { body: b, mission: m, ret: m === 'landReturn' || m === 'orbitReturn', lands: m === 'land' || m === 'landReturn' || m === 'base', name: goalName(goal) }; };
 // kept for older saves and callers
 const GOALS = new Proxy({}, { get: (_, k) => typeof k === 'string' && k.includes(':') ? Object.assign(goalInfo(k), { ph: phasesOf(k).map(p => p.k) }) : undefined });
 const LEGACY = { lko: 'Kerbin:orbit', munFlyby: 'Mun:flyby', munOrbit: 'Mun:orbit', munLand: 'Mun:land', munReturn: 'Mun:landReturn', minmusOrbit: 'Minmus:orbit', minmusLand: 'Minmus:land', minmusReturn: 'Minmus:landReturn' };
@@ -926,7 +993,7 @@ function optimize(inv, goal, opts = {}) {
   if (!C.cmds.length) return { error: 'Add a command pod, cockpit or probe core.' };
   if (!C.engs.length) return { error: 'Add at least one engine.' };
   let fix = fixtures(goal, inv, opts.objective === 'science' ? 'science' : C);
-  if (opts.station) { const f2 = {}; for (const [id, n] of Object.entries(fix)) if (BY[id].rfin) f2[id] = n; fix = Object.assign(f2, opts.station.fix); } // a station launch carries its modules, not chutes or legs
+  if (opts.station) { const f2 = {}; for (const [id, n] of Object.entries(fix)) if (BY[id].rfin || (goalInfo(goal).lands && (BY[id].leg || BY[id].chute))) f2[id] = n; fix = Object.assign(f2, opts.station.fix); } // a station launch carries its modules, not chutes or legs
   const restarts = opts.restarts || 6, iters = Math.max(opts.iters || 6000, Math.ceil((opts.minTests || 5000) / restarts));
   let tested = 0;
   if (opts.objective === 'science') C.sci = Object.keys(inv).filter(id => BY[id] && BY[id].sci && inv[id] > 0);
@@ -982,7 +1049,7 @@ function autoInventory(allowed) {
   for (const p of Object.values(BY)) {
     if (allowed && !allowed(p)) continue;
     if (p.sci) continue;
-    inv[p.id] = p.cmd ? 1 : p.cat === 'Fuel tanks' ? 10 : p.ta != null || p.jet ? (p.d === 'r' ? 8 : 4) : p.dec ? (p.radial ? 8 : 4) : p.adp ? 2 : p.chute ? 3 : p.leg ? 4 : p.rfin ? 4 : p.wing ? 8 : p.intake ? 6 : p.cone ? 8 : p.shield ? 1 : p.stn ? ({ hab: 0, port: 8, power: 16, battery: 8, rcs: 8, mono: 4 })[p.stn] : 2;
+    inv[p.id] = p.cmd ? 1 : p.cat === 'Fuel tanks' ? 10 : p.ta != null || p.jet ? (p.d === 'r' ? 8 : 4) : p.dec ? (p.radial ? 8 : 4) : p.adp ? 2 : p.chute ? 3 : p.leg ? 4 : p.rfin ? 4 : p.wing ? 8 : p.intake ? 6 : p.cone ? 8 : p.shield ? 1 : p.stn ? ({ hab: 0, port: 8, power: 16, battery: 8, rcs: 8, mono: 4, hub: 2, kas: 12 })[p.stn] : 2;
     if (!inv[p.id]) delete inv[p.id];
   }
   return inv;
@@ -999,24 +1066,29 @@ function stationOrbit(b) {
   const hoh = Math.sqrt(mu / r1) * (Math.sqrt(2 * r / (r1 + r)) - 1) + Math.sqrt(mu / r) * (1 - Math.sqrt(2 * r1 / (r1 + r)));
   return { T, dark, darkT: T * dark, sun: Math.min(3, SUN[sb] || 1), alt, park: LOWALT[b], R0, mu, phase, hoh, xfer: Math.PI * Math.sqrt(at ** 3 / mu), wait: 1 / (1 / T1 - 1 / T) };
 }
+// a surface base: night is half a local day (tidally locked moons have very long ones)
+const ROT = { Kerbin: 21549, Mun: 138984, Minmus: 40400, Moho: 1210000, Eve: 80500, Gilly: 28255, Duna: 65518, Ike: 65518, Dres: 34800, Laythe: 52981, Vall: 105962, Tylo: 211926, Bop: 544507, Pol: 901903, Eeloo: 19460 };
+function baseSite(b) { const o = stationOrbit(b); return { base: true, T: ROT[b], dark: 0.5, darkT: ROT[b] / 2, sun: o.sun, alt: 0, park: o.park }; }
 function planStation(inv0, goal, opts = {}) {
-  const body = goal.split(':')[0], orb = stationOrbit(body), orbitGoal = body + ':orbit';
+  const body = goal.split(':')[0], isBase = /:base$/.test(goal), orb = isBase ? baseSite(body) : stationOrbit(body), orbitGoal = body + (isBase ? ':land' : ':orbit');
+  const longNight = orb.darkT > 3 * 3600; // batteries can't carry a night this long: it needs an RTG or a reactor
   const mods = Object.entries(opts.modules || {}).filter(([id, n]) => BY[id] && BY[id].stn && n > 0);
   if (!mods.length) return { error: 'Pick at least one station module.' };
   const inv = Object.assign({}, inv0), notes = [];
   const units = [], extras = {}, picked = {};
   for (const [id, n] of mods) { if (BY[id].stn === 'hab') for (let i = 0; i < n; i++) units.push(id); else picked[id] = n; }
+  const hubUnit = units.find(id => BY[id].hubPorts); // a module that is also a hub (K&K Central Hub)
   // what the station uses: a little for the probe core and comms, labs run at their rated draw
   const crew = units.reduce((a, id) => a + (BY[id].crew || 0), 0);
   const load = 0.2 + units.reduce((a, id) => a + (BY[id].ec || 0), 0);
-  const genOf = (id, n) => n * BY[id].ecGen * (BY[id].rtg ? 1 : orb.sun * (1 - orb.dark) * 0.7); // panels average over the orbit, not always facing the sun
-  const needGen = load * 1.2, needBat = load * orb.darkT * 1.3 + 50;
-  let gen = 0, bat = 0;
+  const genOf = (id, n) => n * BY[id].ecGen * (BY[id].rtg ? 1 : longNight ? 0 : orb.sun * (1 - orb.dark) * 0.7); // panels average over the orbit (or day), not always facing the sun
+  const needGen = load * 1.2, needBat = longNight ? load * 600 + 200 : load * orb.darkT * 1.3 + 50;
+  let gen = 0, bat = units.reduce((a, id) => a + (BY[id].bat || 0), 0);
   for (const [id, n] of Object.entries(picked)) { if (BY[id].stn === 'power') gen += genOf(id, n); if (BY[id].stn === 'battery') bat += BY[id].bat * n; if (BY[id].stn === 'power' || BY[id].stn === 'battery') extras[id] = n; }
   const fill = (kind, have, need, per) => { // lightest set of one part type that covers the rest
     if (have >= need) return have;
     let best = null;
-    for (const id of Object.keys(inv).filter(x => BY[x] && BY[x].stn === kind && inv[x] > 0)) { const n = Math.ceil((need - have) / per(id)), nn = Math.min(n, inv[id]), m = BY[id].m * nn + (nn < n ? 1e3 : 0); if (!best || m < best.m) best = { id, n: nn, m }; }
+    for (const id of Object.keys(inv).filter(x => BY[x] && BY[x].stn === kind && inv[x] > 0 && per(x) > 0)) { const n = Math.ceil((need - have) / per(id)), nn = Math.min(n, inv[id]), m = BY[id].m * nn + (nn < n ? 1e3 : 0); if (!best || m < best.m) best = { id, n: nn, m }; }
     if (!best) return have;
     inv[best.id] -= best.n; extras[best.id] = (extras[best.id] || 0) + best.n; have += per(best.id) * best.n;
     return have < need && best.n ? fill(kind, have, need, per) : have; // not enough of one kind: add another
@@ -1029,25 +1101,50 @@ function planStation(inv0, goal, opts = {}) {
     for (const id of units.slice().sort((a, b) => BY[b].m - BY[a].m)) { const b = bins.slice().sort((x, y) => x.m - y.m)[0]; b.units.push(id); b.m += BY[id].m; }
     bins.sort((a, b) => b.m - a.m); // the heaviest launch is the core
     const invS = Object.assign({}, inv), take = (id, n) => { invS[id] = (invS[id] || 0) - n; };
-    // one port type for every join: the core has one per module plus a free one for visiting ships
-    const wide = units.some(id => sz(BY[id].d) >= 2.5), needPorts = 2 * k - 1;
-    const portIds = ['portSr', 'port', 'portIn', 'portSh', 'portJr'].filter(id => BY[id] && (!(id === 'portSr') || wide));
-    const havePort = id => (invS[id] || 0) + (picked[id] || 0);
-    const pt = portIds.find(id => havePort(id) >= needPorts) || portIds.find(id => havePort(id) > 0) || null;
-    const ptN = pt ? Math.min(needPorts, havePort(pt)) : 0;
-    if (pt) take(pt, Math.max(0, ptN - (picked[pt] || 0)));
     const pkgs = bins.map((b, i) => { const fix = {}; for (const id of b.units) fix[id] = (fix[id] || 0) + 1; return { units: b.units, fix, core: i === 0 }; });
-    if (pt) { pkgs[0].fix[pt] = Math.min(ptN, k); for (let i = 1; i < k; i++) if (ptN - k >= i) pkgs[i].fix[pt] = 1; }
-    for (const [id, n] of Object.entries(extras)) pkgs[0].fix[id] = (pkgs[0].fix[id] || 0) + n;
-    for (const [id, n] of Object.entries(picked)) if (!['power', 'battery', 'port'].includes(BY[id].stn)) pkgs[0].fix[id] = (pkgs[0].fix[id] || 0) + n; // RCS you picked rides on the core
-    // modules that dock need RCS: 4 thruster blocks and monopropellant for about 40 m/s
+    const addTo = (pk, id, n) => { pk.fix[id] = (pk.fix[id] || 0) + n; };
+    const stock = id => (invS[id] || 0) + (picked[id] || 0);
+    const useN = (id, n) => { const fromPick = Math.min(n, picked[id] || 0); take(id, n - fromPick); };
+    // how modules join: KAS joints on the ground when you have them, otherwise docking ports
+    const kasJoin = isBase && k > 1 && ['kasTJ2', 'kasTJ1'].some(id => (invS[id] || 0) >= k - 1) && (invS.kasJS1 || 0) >= k - 1;
+    let pt = null, ptN = 0, needPorts = 0, portList = [];
+    if (kasJoin) { const j = (invS.kasTJ2 || 0) >= k - 1 ? 'kasTJ2' : 'kasTJ1'; for (let i = 1; i < k; i++) { addTo(pkgs[i], j, 1); addTo(pkgs[0], 'kasJS1', 1); } take(j, k - 1); take('kasJS1', k - 1); }
+    else {
+      // one port type for every join (ports only dock to their own type); a station keeps one free for visiting ships
+      needPorts = isBase ? 2 * (k - 1) : 2 * k - 1;
+      const wide = units.some(id => sz(BY[id].d) >= 2.5), order = wide ? ['size2', 'size1', 'size0', 'size4'] : ['size1', 'size0', 'size2', 'size4'];
+      const idsOf = t => Object.keys(BY).filter(id => BY[id].stn === 'port' && BY[id].pt === t && (!isBase || true)).sort((a, b) => (isBase ? (BY[b].ground ? 1 : 0) - (BY[a].ground ? 1 : 0) : 0) || BY[a].m - BY[b].m);
+      const haveT = t => idsOf(t).reduce((a, id) => a + stock(id), 0);
+      pt = order.find(t => haveT(t) >= needPorts) || order.slice().sort((a, b) => haveT(b) - haveT(a)).find(t => haveT(t) > 0) || null;
+      if (pt && needPorts) for (const id of idsOf(pt)) { const n = Math.min(stock(id), needPorts - portList.length); for (let i = 0; i < n; i++) portList.push(id); useN(id, n); }
+      ptN = portList.length;
+      const coreN = Math.min(ptN, isBase ? k - 1 : k);
+      portList.slice(0, coreN).forEach(id => addTo(pkgs[0], id, 1));
+      portList.slice(coreN).forEach((id, i) => { if (pkgs[i + 1]) addTo(pkgs[i + 1], id, 1); });
+    }
+    // three or more ports on the core need a hub to mount them on (unless a module is one)
+    let hub = hubUnit || null;
+    const corePorts = kasJoin ? 0 : Math.min(ptN, isBase ? k - 1 : k);
+    if (!hub && corePorts >= 3) { const h = Object.keys(BY).filter(id => BY[id].stn === 'hub' && stock(id) > 0 && BY[id].hubPorts >= corePorts).sort((a, b) => BY[a].m - BY[b].m)[0]; if (h) { addTo(pkgs[0], h, 1); useN(h, 1); hub = h; } }
+    for (const [id, n] of Object.entries(extras)) addTo(pkgs[0], id, n);
+    for (const [id, n] of Object.entries(picked)) if (!['power', 'battery', 'port', 'hub'].includes(BY[id].stn)) addTo(pkgs[0], id, n); // anything else you picked rides on the core
+    // modules that dock in orbit need RCS: 4 thruster blocks and monopropellant for about 40 m/s
     let rcsOk = true;
-    for (const pk of pkgs.slice(1)) {
+    if (!isBase) for (const pk of pkgs.slice(1)) {
       const m = Object.entries(pk.fix).reduce((a, [id, n]) => a + BY[id].m * n, 0) * 1.5 + 1, mono = m * (1 - Math.exp(-40 / (240 * G0))) / 0.004;
       const th = ['rv105', 'pa7'].find(id => (invS[id] || 0) >= (id === 'pa7' ? 8 : 4));
       const tk = Object.keys(invS).filter(id => BY[id] && BY[id].stn === 'mono' && invS[id] > 0).map(id => ({ id, n: Math.ceil(mono / BY[id].mono) })).filter(x => invS[x.id] >= x.n).sort((a, b) => BY[a.id].m * a.n - BY[b.id].m * b.n)[0];
       if (!th || !tk) { rcsOk = false; continue; }
-      const nth = th === 'pa7' ? 8 : 4; pk.fix[th] = nth; take(th, nth); pk.fix[tk.id] = tk.n; take(tk.id, tk.n); pk.mono = tk.n * BY[tk.id].mono;
+      const nth = th === 'pa7' ? 8 : 4; addTo(pk, th, nth); take(th, nth); addTo(pk, tk.id, tk.n); take(tk.id, tk.n); pk.mono = tk.n * BY[tk.id].mono;
+    }
+    // heavy modules wobble on a single docking port: brace each one with two KAS joints (if you have KAS)
+    let braceNeed = 0, braced = 0;
+    const hasKas = Object.keys(inv0).some(id => BY[id] && BY[id].kas) || Object.keys(picked).some(id => BY[id].kas);
+    if (!isBase && hasKas) for (const pk of pkgs.slice(1)) {
+      if (Object.entries(pk.fix).reduce((a, [id, n]) => a + BY[id].m * n, 0) < 5) continue;
+      braceNeed++;
+      const br = ['kasTJ1', 'kasPCB1'].find(id => (invS[id] || 0) >= 2);
+      if (br && (invS.kasJS1 || 0) >= 2) { addTo(pk, br, 2); take(br, 2); addTo(pkgs[0], 'kasJS1', 2); take('kasJS1', 2); braced++; }
     }
     // fly each launch; with your own parts, what one launch uses isn't there for the next
     let invL = Object.assign({}, invS), tested = 0;
@@ -1055,42 +1152,47 @@ function planStation(inv0, goal, opts = {}) {
     for (let i = 0; i < pkgs.length; i++) {
       const base = opts.auto ? Object.assign({}, invS) : invL, invP = Object.assign({}, base);
       for (const [id, n] of Object.entries(pkgs[i].fix)) invP[id] = (invP[id] || 0) + n;
-      const R2 = optimize(invP, orbitGoal, { iters: quick ? 300 : opts.iters, restarts: quick ? 3 : opts.restarts, minTests: quick ? 900 : 5000, limits: Object.assign({}, opts.limits || {}, { extraDv: i ? 150 : 0 }), objective: opts.objective, station: { fix: pkgs[i].fix }, progress: opts.progress && !quick ? p => opts.progress((i + p) / pkgs.length) : null });
+      const R2 = optimize(invP, orbitGoal, { iters: quick ? 400 : opts.iters, restarts: quick ? 4 : opts.restarts, minTests: quick ? 1600 : 5000, limits: Object.assign({}, opts.limits || {}, { extraDv: i ? (isBase ? 80 : 150) : 0 }), objective: opts.objective, station: { fix: pkgs[i].fix }, progress: opts.progress && !quick ? p => opts.progress((i + p) / pkgs.length) : null });
       if (R2.error) return { error: R2.error };
       tested += R2.tested || 0;
       if (!opts.auto) { const u = partsUsed(R2.g); for (const [id, n] of Object.entries(u)) if (!(id in pkgs[i].fix)) invL[id] = (invL[id] || 0) - n; }
       res.push(Object.assign(R2, { goal: orbitGoal }));
       if (quick && !R2.r.ok) break;
     }
-    return { k, pkgs, res, pt, ptN, needPorts, rcsOk, tested, ok: res.length === pkgs.length && res.every(x => x.r.ok) };
+    return { k, pkgs, res, pt, ptN, needPorts, rcsOk, kasJoin, hub, braceNeed, braced, tested, ok: res.length === pkgs.length && res.every(x => x.r.ok) };
   };
-  let tested = 0, pick = null;
+  let tested = 0, pick = null, heavyNote = null;
   const maxK = Math.max(1, units.length);
   for (let k = 1; k <= maxK; k++) {
     const q = plan(k, true); if (q.error) return q; tested += q.tested;
     if (q.ok) { pick = k; break; }
     const failed = q.res.length - 1, fp = q.pkgs[failed]; // a launch carrying one module can't get lighter
-    if (fp && fp.units.length <= 1) { pick = k; notes.push(`${fp.units[0] ? BY[fp.units[0]].t : 'The core'} is too heavy for any rocket your parts can build${opts.limits ? ' within your buildings\' limits' : ''}.`); break; }
+    if (fp && fp.units.length <= 1) { pick = k; heavyNote = (`${fp.units[0] ? BY[fp.units[0]].t : 'The core'} is too heavy for any rocket your parts can build${opts.limits ? ' within your buildings\' limits' : ''}.`); break; }
     if (opts.progress) opts.progress(k / maxK * 0.3);
   }
   const P = plan(pick || maxK, false); if (P.error) return P;
+  if (heavyNote && !P.ok) notes.push(heavyNote);
   tested += P.tested;
   const capacity = crew + P.res.reduce((a, x) => a + (BY[x.g.cmd].crew || 0), 0);
+  const where = goalName(goal).replace(/ space station| surface base/, '');
   const checks = [
-    { name: `Every launch reaches ${goalName(goal).replace(' space station', '')} orbit with Δv to rendezvous`, ok: P.ok },
-    { name: `Panels cover the load (${load.toFixed(1)} EC/s) in sunlight`, ok: gen >= needGen },
-    { name: `Batteries last the ${(orb.darkT / 60).toFixed(0)}-minute night`, ok: bat >= needBat },
-    { name: 'Docking ports: one per join plus a free one for visitors', ok: !!P.pt && P.ptN >= P.needPorts },
-    { name: 'RCS and monopropellant on every module that docks', ok: P.rcsOk },
+    { name: isBase ? `Every launch lands on ${where}${P.k > 1 ? ', the modules within reach of the core' : ''}` : `Every launch reaches ${where} orbit with Δv to rendezvous`, ok: P.ok },
+    longNight ? { name: `RTG or reactor power for the ${(orb.darkT / 3600).toFixed(0)}-hour night (${load.toFixed(1)} EC/s)`, ok: gen >= needGen }
+      : { name: `Panels cover the load (${load.toFixed(1)} EC/s) in sunlight`, ok: gen >= needGen },
+    { name: longNight ? 'Battery buffer' : `Batteries last the ${orb.darkT > 5400 ? (orb.darkT / 3600).toFixed(1) + '-hour' : (orb.darkT / 60).toFixed(0) + '-minute'} night`, ok: bat >= needBat },
   ];
+  if (P.k > 1) checks.push(P.kasJoin ? { name: 'KAS telescopic joint and socket for every module', ok: true } : { name: isBase ? 'Docking ports to join every module' : 'Docking ports: one per join plus a free one for visitors', ok: !!P.pt && P.ptN >= P.needPorts });
+  else if (!isBase) checks.push({ name: 'A free docking port for visiting ships', ok: !!P.pt && P.ptN >= 1 });
+  if (!isBase && P.k > 1) checks.push({ name: 'RCS and monopropellant on every module that docks', ok: P.rcsOk });
+  if (P.braceNeed) checks.push({ name: 'Heavy docked modules braced with KAS joints', ok: P.braced >= P.braceNeed });
   if (opts.crew) checks.push({ name: `Room for ${opts.crew} crew`, ok: capacity >= opts.crew });
-  if (!P.pt && P.k > 1) notes.push('No docking ports in your parts.');
+  if (!P.pt && P.k > 1 && !P.kasJoin) notes.push('No docking ports in your parts.');
   const ok = checks.every(c => c.ok);
   const sum = f => P.res.reduce((a, x) => a + (x.r[f] || 0), 0);
-  return { station: true, goal, body, orbit: orb, launches: P.res.map((x, i) => Object.assign(x, { pkg: P.pkgs[i] })), port: P.pt, power: { load, gen, bat, needGen, needBat }, crew: capacity, notes, tested,
+  return { station: true, base: isBase, kasJoin: P.kasJoin, hub: P.hub, portType: P.pt, goal, body, orbit: orb, launches: P.res.map((x, i) => Object.assign(x, { pkg: P.pkgs[i] })), port: Object.keys(P.pkgs[0].fix).find(id => BY[id].stn === 'port') || null, power: { load, gen, bat, needGen, needBat }, crew: capacity, notes, tested,
     r: { ok, checks, margin: Math.min(...P.res.map(x => x.r.margin)), cost: sum('cost'), parts: sum('parts'), mass: sum('mass'), stab: notes } };
 }
-const api = { planStation, stationOrbit, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
+const api = { planStation, stationOrbit, baseSite, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -1596,7 +1698,7 @@ function rocket(g, M, R) {
   let y = 0;
   const cmd = B(d.cmd), rc = rad(cmd.d), fix = Object.entries(d.fix || {});
   // station payload stacked on top: docking port, then modules, then monoprop tanks; panels and RCS on the sides
-  const order = { port: 0, hab: 1, mono: 2 }, pay = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((a, b) => order[B(a[0]).stn] - order[B(b[0]).stn]);
+  const order = { port: 0, hub: 1, hab: 2, mono: 3 }, pay = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((a, b) => (order[B(a[0]).stn] || 0) - (order[B(b[0]).stn] || 0));
   const payTop = y;
   for (const [id, n] of pay) for (let k = 0; k < n; k++) {
     const p = B(id), r = rad(p.d), h = Math.max(.2, p.h);
@@ -1783,7 +1885,9 @@ function renderList() {
   renderSum();
 }
 const unlockedSet = () => new Set(st.career.nodes);
-const locked = id => st.career.on && !unlockedSet().has(BY[id].tech);
+const MODS = [['mh', 'Making History', 'Stock DLC: 1.875 m Mastodon, Bobcat, Skiff, Wolfhound, Cheetah and Kodiak engines, FL-TX tanks, TD-18 decoupler'], ['nfc', 'Near Future Construction', 'Octo-girder and annular docking connectors, hubs, the Octo-Girder Guidance Unit, skeletal adapters'], ['kpbs', 'Planetary Base Systems (K&K)', 'Habitats, lab, greenhouse, central hub, cupola, reactor, containers, corridors, Bigfoot legs, Meerkat engine'], ['kas', 'Kerbal Attachment System', 'Telescopic joints, joint sockets, cable bracing, resource transfer and winches: joins base modules on the ground and braces heavy docked modules']];
+const modOff = id => BY[id] && BY[id].mod && st.modsOn && st.modsOn[BY[id].mod] === false;
+const locked = id => modOff(id) || (st.career.on && !unlockedSet().has(BY[id].tech));
 const usable = () => {
   const mine = Object.fromEntries(Object.entries(st.inv).filter(([id, n]) => n > 0 && !locked(id)));
   if (st.src !== 'auto') return mine;
@@ -1861,7 +1965,7 @@ function renderGoal() {
   $('mission').hidden = false; $('airBox').hidden = true; $('stnBox').hidden = !isStation(); $('optRocket').closest('label').hidden = isStation(); $('optPlane').closest('label').hidden = isStation();
   const [b, m0] = st.goal.split(':'), B = O.BODY[b];
   $('dest').value = b;
-  const ms = b === 'Kerbin' ? ['orbit', 'station'] : Object.keys(O.MISSIONS).filter(m => !(B.gas && (m === 'land' || m === 'landReturn')));
+  const ms = b === 'Kerbin' ? ['orbit', 'station'] : Object.keys(O.MISSIONS).filter(m => !(B.gas && (m === 'land' || m === 'landReturn' || m === 'base')));
   const m = ms.includes(m0) ? m0 : ms.includes('land') ? 'land' : 'orbit';
   st.goal = b + ':' + m;
   $('mission').innerHTML = ms.map(k => `<option value="${k}">${b === 'Kerbin' && k === 'orbit' ? 'Low orbit' : O.MISSIONS[k][0].toUpperCase() + O.MISSIONS[k].slice(1)}</option>`).join('');
@@ -1873,14 +1977,16 @@ function renderGoal() {
 }
 // ---- space stations: pick the modules; the app adds ports, power and RCS and splits it over launches
 st.stn = Object.assign({ mods: { hitchhiker: 1 }, crew: 0 }, st.stn || {});
-const isStation = () => /:station$/.test(st.goal);
-const STN_KIND = [['hab', 'Crew cabins and labs'], ['port', 'Docking ports (extra)'], ['power', 'Power (extra)'], ['battery', 'Batteries (extra)'], ['rcs', 'RCS thrusters (extra)'], ['mono', 'Monopropellant (extra)']];
+const stnSel = () => ({ mods: Object.fromEntries(Object.entries(st.stn.mods).filter(([id, n]) => n > 0 && BY[id] && !locked(id))), crew: st.stn.crew });
+const isStation = () => /:(station|base)$/.test(st.goal), isBase = () => /:base$/.test(st.goal);
+const STN_KIND = [['hab', 'Crew cabins, labs and habitats'], ['hub', 'Hubs (extra)'], ['kas', 'KAS joints (extra)'], ['port', 'Docking ports (extra)'], ['power', 'Power (extra)'], ['battery', 'Batteries (extra)'], ['rcs', 'RCS thrusters (extra)'], ['mono', 'Monopropellant (extra)']];
 function renderStation() {
-  const b = st.goal.split(':')[0], o = O.stationOrbit(b), ph = O.phasesOf(b + ':orbit');
+  const b = st.goal.split(':')[0], base = isBase(), o = base ? O.baseSite(b) : O.stationOrbit(b), ph = O.phasesOf(b + (base ? ':land' : ':orbit'));
   const row = p => { const n = st.stn.mods[p.id] || 0; return `<div class="pr ${n ? 'has' : ''}"><div style="min-width:0"><div class="t">${esc(p.t)}</div><div class="s">${esc(sizeName(p.d))} · ${fmt(p.m, p.m < 1 ? 3 : 2)} t${p.crew ? ` · ${p.crew} crew` : ''}${p.ecGen ? ` · ${p.ecGen} EC/s` : ''}${p.bat ? ` · ${fmt(p.bat)} EC` : ''}${p.mono ? ` · ${p.mono} mono` : ''}${p.lab ? ' · science lab' : ''}${p.a ? ' · ≈' : ''}</div></div><div class="qty"><button type="button" data-sd="-1" data-id="${p.id}" aria-label="Fewer">−</button><input inputmode="numeric" data-sid="${p.id}" value="${n}" aria-label="How many"><button type="button" data-sd="1" data-id="${p.id}" aria-label="More">+</button></div></div>`; };
-  $('stnBox').innerHTML = `<p class="note" style="margin:0 0 6px">Pick the modules you want up there. The app adds docking ports, solar panels, batteries and RCS from ${st.src === 'auto' ? 'every unlocked part' : 'your parts'}, splits the station into as few launches as your rockets can carry, and plans the docking order. Extras below are optional.</p>
+  $('stnBox').innerHTML = `<p class="note" style="margin:0 0 6px">${base ? `Pick the modules for the base. The app adds power (an RTG or reactor when the night is long), landing legs and KAS joints or corridor docking ports from ${st.src === 'auto' ? 'every unlocked part' : 'your parts'}, splits the base into as few landers as your rockets can carry, and plans how they link up.` : `Pick the modules you want up there. The app adds docking ports, a hub, solar panels, batteries, RCS and KAS bracing from ${st.src === 'auto' ? 'every unlocked part' : 'your parts'}, splits the station into as few launches as your rockets can carry, and plans the docking order.`} Extras below are optional.</p>
     ${STN_KIND.map(([k, label]) => { const ps = PARTS.filter(p => p.stn === k && !locked(p.id)); return ps.length ? `<h4 style="margin:10px 0 4px">${label}</h4>${ps.map(row).join('')}` : ''; }).join('') || '<p class="warn">No station parts researched yet.</p>'}
     <label class="ck"><span style="min-width:120px">Crew it must hold</span><input id="stnCrew" inputmode="numeric" value="${st.stn.crew || 0}" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--line);background:rgba(8,12,16,.7)"></label>`;
+  if (base) { $('goalDv').innerHTML = `Base on ${esc(b)}: nights last <b>${o.darkT > 7200 ? fmt(o.darkT / 3600, 1) + ' hours' : fmt(o.darkT / 60) + ' minutes'}</b>${o.darkT > 10800 ? ' (too long for batteries: it takes an RTG or a reactor)' : ''}${o.sun !== 1 ? `, sunlight ${fmt(o.sun, 2)}× Kerbin's` : ''}. Each lander needs ${fmt(ph.reduce((a, p) => a + p.dv, 0))} m/s, plus 80 m/s to set down next to the core.`; return; }
   $('goalDv').innerHTML = `Station at <b>${o.alt} km</b>: a ${fmt(o.T / 60)}-minute orbit with ${fmt(o.darkT / 60)} minutes of night${o.sun !== 1 ? `, sunlight ${fmt(o.sun, 2)}× Kerbin's` : ''}. Each launch needs ${fmt(ph.reduce((a, p) => a + p.dv, 0))} m/s to reach ${o.park} km, plus 150 m/s to rendezvous and dock.`;
 }
 $('stnBox').addEventListener('click', e => { const bt = e.target.closest('[data-sd]'); if (!bt) return; const id = bt.dataset.id; st.stn.mods[id] = Math.max(0, (st.stn.mods[id] || 0) + +bt.dataset.sd); if (!st.stn.mods[id]) delete st.stn.mods[id]; save(); renderStation(); });
@@ -1907,13 +2013,13 @@ function runKind(kind, eff, onProg) {
     if (!worker) worker = makeWorker();
     if (worker) {
       const h = e => { if (e.data.kind !== kind) return; if (e.data.prog != null) onProg(e.data.prog); if (e.data.done) { worker.removeEventListener('message', h); res(e.data.done); } };
-      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must.filter(id => !locked(id)), stn: st.stn, auto: st.src === 'auto' });
-    } else setTimeout(() => res(kind === 'station' ? O.planStation(usable(), st.goal, { modules: st.stn.mods, crew: st.stn.crew, auto: st.src === 'auto', iters: 1000 * eff, restarts: 5, limits: limitsFor('rocket'), objective: st.objective }) : kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
+      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must.filter(id => !locked(id)), stn: stnSel(), auto: st.src === 'auto' });
+    } else setTimeout(() => res(kind === 'station' ? O.planStation(usable(), st.goal, { modules: stnSel().mods, crew: st.stn.crew, auto: st.src === 'auto', iters: 1000 * eff, restarts: 5, limits: limitsFor('rocket'), objective: st.objective }) : kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
   });
 }
 $('btnRun').onclick = async () => {
   const eff = +$('effort').value, kinds = [];
-  if (isStation()) { if (!Object.values(st.stn.mods).some(n => n > 0)) { toast('Pick at least one station module.'); return; } kinds.push('station'); }
+  if (isStation()) { if (!Object.keys(stnSel().mods).length) { toast('Pick at least one module.'); return; } kinds.push('station'); }
   else {
   if ($('optRocket').checked && !isAir()) kinds.push('rocket');
   const U2 = usable(); if (isAir() && !(Object.keys(U2).some(id => BY[id].jet) && Object.keys(U2).some(id => BY[id].wing))) { toast('Planes need jets, wings, intakes and landing gear in your parts (or use Any parts).'); return; }
@@ -1925,7 +2031,7 @@ $('btnRun').onclick = async () => {
   let qi = 0; const qt = setInterval(() => { $('runNote').style.opacity = 0; setTimeout(() => { $('runNote').textContent = quips[qi++ % quips.length]; $('runNote').style.opacity = 1; }, 250); }, 2200);
   last = { rocket: null, plane: null, station: null }; stLaunch = 0;
   for (let i = 0; i < kinds.length; i++) {
-    $('runNote').textContent = kinds[i] === 'plane' ? 'Flying spaceplane designs…' : kinds[i] === 'station' ? 'Splitting the station over launches…' : 'Trying rocket arrangements…';
+    $('runNote').textContent = kinds[i] === 'plane' ? 'Flying spaceplane designs…' : kinds[i] === 'station' ? (isBase() ? 'Splitting the base over landers…' : 'Splitting the station over launches…') : 'Trying rocket arrangements…';
     last[kinds[i]] = await runKind(kinds[i], eff, p => { const w = ((i + p) / kinds.length * 100) + '%'; bar.style.width = w; rk.style.left = w; });
   }
   clearInterval(qt); $('btnRun').disabled = false; $('prog').hidden = true; $('runNote').textContent = '';
@@ -1994,7 +2100,7 @@ function rocketHtml(R) {
   const fix = Object.entries(g.fix || {}), adQ = (r.joins || []).filter(j => j.adp).slice();
   let prevT = B(g.cmd).t;
   const item = (title, text) => { const i = adQ.findIndex(j => j.above === prevT && j.below === title); if (i >= 0) { h += `<li>${esc(BY[adQ[i].adp].t)} (adapter)</li>`; adQ.splice(i, 1); } prevT = title; h += `<li>${text}</li>`; };
-  const pay = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((a, b) => ({ port: 0, hab: 1, mono: 2 })[B(a[0]).stn] - ({ port: 0, hab: 1, mono: 2 })[B(b[0]).stn]);
+  const pay = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((a, b) => (({ port: 0, hub: 1, hab: 2, mono: 3 })[B(a[0]).stn] || 0) - (({ port: 0, hub: 1, hab: 2, mono: 3 })[B(b[0]).stn] || 0));
   for (const [id, n] of pay) h += `<li>${n > 1 ? n + '× ' : ''}${esc(B(id).t)}${B(id).stn === 'port' ? ' (docking port, facing up)' : ''}</li>`;
   h += `<li>${esc(B(g.cmd).t)}${fix.filter(([id]) => B(id).chute && B(id).d !== 'r').map(([id]) => ` with a ${esc(B(id).t)} on top`).join('')}</li>`;
   const radialFix = fix.filter(([id]) => B(id).leg || B(id).rfin || (B(id).chute && B(id).d === 'r'));
@@ -2047,28 +2153,39 @@ function mjHtml(R) {
     <li>Limit dynamic pressure to <b>${fmt(a.qMax / 1000)} kPa</b>${R.g.stages.some(s => s.eng && BY[s.eng].srb) || (R.g.boost && BY[R.g.boost.unit].srb) ? ' (solid boosters ignore it: they can\'t throttle)' : ''}; autostage on; corrective steering on.</li>
     ${hand}</ul><p class="note" style="margin:6px 0 0">${a.ok ? `Flown in the drag simulation with these settings: <b>${fmt(a.dv)} m/s</b> to orbit (the Δv map says 3,400), engines off after ${mss(a.t)}, peak dynamic pressure ${fmt(a.maxQ / 1000)} kPa, liftoff TWR ${fmt(a.twr0, 2)}.` : `In the drag simulation it ${esc(a.msg || 'doesn\'t reach orbit')}.`}</p></div>`;
 }
-// MechJeb rendezvous and docking steps for a module flying up to the station
+// MechJeb rendezvous and docking steps for a module flying up to the station (or landing beside a base core)
 function rdvHtml(R) {
   if (!R.pkg || R.pkg.core) return '';
-  const b = R.goal.split(':')[0], o = O.stationOrbit(b);
-  return `<div class="card"><h3>Rendezvous and docking (MechJeb)</h3><ol style="margin:0;padding-left:20px">
+  const b = R.goal.split(':')[0], fx = R.g.fix || {}, portId = Object.keys(fx).find(id => BY[id].stn === 'port'), joint = Object.keys(fx).find(id => BY[id].kas === 'join' || BY[id].kas === 'brace');
+  if (/:land$/.test(R.goal)) return `<div class="card"><h3>Landing next to the core (MechJeb + ${joint ? 'KAS' : 'DPAI'})</h3><ol style="margin:0;padding-left:20px">
+    <li>Target the base core. MechJeb Landing Guidance → “Land at target”, touchdown speed 1 m/s; it plans the deorbit burn and corrects on the way down.</li>
+    <li>Aim to stop within 30 m of the core on flat ground; the 80 m/s reserve covers the final hover and sideways moves.</li>
+    ${joint ? `<li>KAS: send an engineer on EVA, grab the ${esc(BY[joint].t)} on this module and attach its end to the JS-1 Joint Socket on the core. The modules are then one vessel and share power and crew.</li>` : portId ? `<li>Roll or winch it in until the ${esc(BY[portId].t)} faces the core's. Docking Port Alignment Indicator: target the core's port, line up the crosshair and roll indicator, close at under 0.2 m/s. Adjust the leg suspension so the ports sit at the same height.</li>` : '<li>No KAS joints or docking ports: the modules stay separate vessels.</li>'}</ol></div>`;
+  const o = O.stationOrbit(b);
+  return `<div class="card"><h3>Rendezvous and docking (MechJeb + DPAI)</h3><ol style="margin:0;padding-left:20px">
     <li>Launch into a ${o.park} km orbit${b !== 'Kerbin' ? ` at ${esc(b)}` : ''} (${fmt(o.alt - o.park)} km below the station). In MechJeb's ascent guidance you can tick “Launch to rendezvous” with the station as target to shorten the wait.</li>
     <li>Maneuver planner → “Hohmann transfer to target”. It burns when the station is <b>${fmt(o.phase, 1)}°</b> ahead of you: ${fmt(o.hoh, 1)} m/s in two burns, ${fmt(o.xfer / 60)} minutes apart. The longest you'd wait for that angle is about ${o.wait > 7200 ? fmt(o.wait / 3600, 1) + ' hours' : fmt(o.wait / 60) + ' minutes'}.</li>
     <li>“Fine tune closest approach to target” to 100 m, then “Match velocities with target” at closest approach.</li>
-    <li>Docking autopilot: target the station's free ${esc(BY[Object.keys(R.g.fix).find(id => BY[id].stn === 'port')] ? BY[Object.keys(R.g.fix).find(id => BY[id].stn === 'port')].t : 'docking port')}, control from this module's port, speed limit 1 m/s; RCS does the last 10 m at about 0.2 m/s.</li>
-    <li>Keep the station still while you come in: SmartASS “Normal +” on the core.</li></ol></div>`;
+    <li>Final approach: target the station's free ${esc(portId ? BY[portId].t : 'docking port')} and control from this module's port. Either MechJeb's docking autopilot (speed limit 1 m/s), or by hand with the Docking Port Alignment Indicator: keep the crosshair centred and the roll lined up, closing at 0.2 m/s for the last 10 m on RCS.</li>
+    <li>Keep the station still while you come in: SmartASS “Normal +” on the core.</li>
+    ${joint ? `<li>After docking: an engineer on EVA links the two ${esc(BY[joint].t)}s to the JS-1 sockets on the core, so the joint doesn't wobble.</li>` : ''}</ol></div>`;
 }
 // the whole station: launches, docking order, power, crew
 function stationHtml(R, L) {
   const o = R.orbit, pw = R.power, n = R.launches.length, i0 = R.launches.indexOf(L), port = R.port ? BY[R.port].t : null;
   const role = i => i === 0 ? 'Core' : `Module ${i}`;
   const mods = x => Object.entries(x.pkg.fix).filter(([id]) => BY[id].stn === 'hab').map(([id, k]) => `${k > 1 ? k + '× ' : ''}${esc(BY[id].t)}`).join(', ') || 'power and ports';
-  let h = `<div class="verdict ${R.r.ok ? 'ok' : 'bad'}"><b>${R.r.ok ? `Station in ${n} launch${n > 1 ? 'es' : ''}` : 'The station plan has problems'}</b>${R.r.ok ? `Every launch reaches ${o.alt} km and docks.` : ''}${R.notes.map(t => ` <span class="warn">${esc(t)}</span>`).join('')}${R.r.checks.filter(c => !c.ok).map(c => ` <span class="warn">✗ ${esc(c.name)}</span>`).join('')}</div>
+  const what = R.base ? 'base' : 'station';
+  let h = `<div class="verdict ${R.r.ok ? 'ok' : 'bad'}"><b>${R.r.ok ? `${R.base ? 'Base' : 'Station'} in ${n} launch${n > 1 ? 'es' : ''}` : `The ${what} plan has problems`}</b>${R.r.ok ? (R.base ? 'Every lander sets down within reach of the core.' : `Every launch reaches ${o.alt} km and docks.`) : ''}${R.notes.map(t => ` <span class="warn">${esc(t)}</span>`).join('')}${R.r.checks.filter(c => !c.ok).map(c => ` <span class="warn">✗ ${esc(c.name)}</span>`).join('')}</div>
   <div class="stats"><div><div class="k">Launches</div><div class="v">${n}</div></div><div><div class="k">Launch mass</div><div class="v">${fmt(R.r.mass)} t</div></div><div><div class="k">Cost</div><div class="v">√${fmt(R.r.cost)}</div></div><div><div class="k">Crew space</div><div class="v">${R.crew}</div></div><div><div class="k">Power</div><div class="v">${fmt(pw.gen, 1)}/${fmt(pw.load, 1)} EC/s</div></div><div><div class="k">Battery</div><div class="v">${fmt(pw.bat)} EC</div></div></div>`;
-  h += `<div class="card"><h3>Docking order</h3><ol style="margin:0;padding-left:20px">${R.launches.map((x, i) => `<li><b>${role(i)}</b>: ${mods(x)}${i === 0 ? ` goes up first, with the solar panels and batteries${port ? ` and ${Math.min(n, x.pkg.fix[R.port] || 0)}× ${esc(port)}` : ''}. It is the passive target: leave it holding Normal +.` : ` docks to port ${i} on the core with its RCS.`}${x.r.ok ? '' : ' <span class="warn">(this launch falls short)</span>'}</li>`).join('')}<li>The last port on the core stays free for crew and supply ships.</li></ol>
-    <p class="note" style="margin:6px 0 0">Night lasts ${fmt(o.darkT / 60)} minutes of each ${fmt(o.T / 60)}-minute orbit; the batteries cover ${fmt(pw.bat / Math.max(.01, pw.load) / 60)} minutes of the station's ${fmt(pw.load, 1)} EC/s (labs at their running draw). Panels are counted at 70% of their rating for not always facing the sun${o.sun !== 1 ? ` and ${fmt(o.sun, 2)}× Kerbin's sunlight` : ''}.</p></div>`;
+  const corePorts = x => Object.entries(x.pkg.fix).filter(([id]) => BY[id].stn === 'port').reduce((a, [, k]) => a + k, 0);
+  const night = o.darkT > 7200 ? `${fmt(o.darkT / 3600, 1)} hours` : `${fmt(o.darkT / 60)} minutes`;
+  h += `<div class="card"><h3>${R.base ? 'Landing order' : 'Docking order'}</h3><ol style="margin:0;padding-left:20px">${R.launches.map((x, i) => `<li><b>${role(i)}</b>: ${mods(x)}${i === 0
+    ? ` ${R.base ? 'lands first and is the target for the rest' : 'goes up first'}, with the power${corePorts(x) ? ` and ${corePorts(x)} docking port${corePorts(x) > 1 ? 's' : ''}` : ''}${R.hub ? ` on a ${esc(BY[R.hub].t)}` : ''}.${R.base ? '' : ' It is the passive target: leave it holding Normal +.'}`
+    : R.base ? (R.kasJoin ? ' lands beside the core; an engineer links it with a KAS joint.' : ' lands beside the core and docks with its corridor docking port.') : ` docks to port ${i} on the core with its RCS.`}${x.r.ok ? '' : ' <span class="warn">(this launch falls short)</span>'}</li>`).join('')}${R.base ? '' : '<li>The last port on the core stays free for crew and supply ships.</li>'}</ol>
+    <p class="note" style="margin:6px 0 0">${R.base ? `Night on the surface lasts ${night}.` : `Night lasts ${night} of each ${fmt(o.T / 60)}-minute orbit.`} The ${what} uses ${fmt(pw.load, 1)} EC/s (labs at their running draw) and makes ${fmt(pw.gen, 1)} EC/s on average; batteries hold ${fmt(pw.bat)} EC${pw.load > 0 ? `, ${fmt(pw.bat / pw.load / 60)} minutes of load` : ''}. Solar panels are counted at 70% of their rating for not always facing the sun${o.sun !== 1 ? ` and ${fmt(o.sun, 2)}× Kerbin's sunlight` : ''}; RTGs and reactors run all the time.</p></div>`;
   h += `<div class="seg" style="flex-wrap:wrap">${R.launches.map((x, i) => `<button type="button" data-launch="${i}" aria-pressed="${i === i0}">${role(i)}${x.r.ok ? '' : ' ✗'}</button>`).join('')}</div>`;
-  h += rocketHtml(L) + checksHtml(L, `${role(i0)} launch checks`) + checksHtml(R, 'Station checks');
+  h += rocketHtml(L) + checksHtml(L, `${role(i0)} launch checks`) + checksHtml(R, R.base ? 'Base checks' : 'Station checks');
   return h;
 }
 const sz = d => d === 'r' ? 0 : d === 'mk2' ? 1.5 : d === 'mk3' ? 3.75 : d;
@@ -2136,6 +2253,13 @@ function renderCareer() {
   }
   el.innerHTML = h;
 }
+function renderMods() {
+  st.modsOn = Object.assign({ mh: true, nfc: true, kas: true, kpbs: true }, st.modsOn || {});
+  $('modCard').innerHTML = `<h3>Installed mods</h3><p class="note" style="margin:0 0 6px">Parts from these mods show up in the parts list, the auto builder and space stations and bases. Switch off any you don't have.</p>${MODS.map(([k, n, d]) => `<label class="ck"><input type="checkbox" data-mod="${k}" ${st.modsOn[k] ? 'checked' : ''}> <span><b>${n}</b><br><span class="note">${d}</span></span></label>`).join('')}
+    <p class="note" style="margin:8px 0 0">Also in your GameData and used in the plans: MechJeb-style ascent, rendezvous, docking and landing steps; Kerbal Engineer-style stage readout; Docking Port Alignment Indicator steps for the final approach. KSPCommunityFixes, B9PartSwitch, Community Category Kit, Community Resource Pack and ModuleManager don't change the numbers, so there's nothing to set for them.</p>`;
+}
+$('modCard').addEventListener('change', e => { const k = e.target.dataset.mod; if (!k) return; st.modsOn[k] = e.target.checked; save(); renderCats(); renderList(); if (isStation()) renderStation(); });
+renderMods();
 document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { st.career.on = b.dataset.mode === 'career'; save(); renderCareer(); renderCats(); });
 $('careerBody').addEventListener('click', e => {
   const b = e.target.closest('[data-bld]'); if (b) { st.career[b.dataset.bld] = +b.dataset.lv; save(); renderCareer(); return; }
