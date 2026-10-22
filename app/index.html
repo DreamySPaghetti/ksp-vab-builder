@@ -60,12 +60,77 @@ label.ck { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px }
 .node.on { background: #233022; border-color: #4e7f2c } .node input { width: 20px; height: 20px; margin: 1px 0 0 } .node .t { font-weight: 600 } .node .pp { font-size: 12px; color: var(--muted) } .node .c { font-size: 12.5px; color: var(--blue); white-space: nowrap }
 .pr.lock { opacity: .55 } .lockt { color: var(--bad); font-size: 12px }
 .fab { position: fixed; right: 14px; bottom: max(14px, env(safe-area-inset-bottom, 0px)); z-index: 5; box-shadow: 0 4px 12px rgba(0,0,0,.5) }
+
+/* ---- look and motion: deep-space backdrop, glass panels, amber accents */
+:root { --bg: #0b0f14; --panel: rgba(30,38,46,.72); --panel2: #26303a; --line: rgba(140,170,200,.14); --glow: rgba(244,182,58,.35); --ease: cubic-bezier(.2,.8,.2,1) }
+body { background: radial-gradient(1200px 600px at 80% -10%, #1b2a3d 0%, transparent 60%), radial-gradient(900px 500px at -10% 110%, #2a1b2e 0%, transparent 55%), var(--bg) }
+body::before, body::after { content: ''; position: fixed; inset: -50%; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(1px 1px at 20px 30px, #fff 50%, transparent 51%), radial-gradient(1px 1px at 140px 80px, #cfe3ff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 80px 160px, #fff 50%, transparent 51%), radial-gradient(1px 1px at 200px 220px, #ffe9c4 50%, transparent 51%);
+  background-size: 240px 240px; opacity: .35; animation: drift 180s linear infinite }
+body::after { background-size: 380px 380px; opacity: .2; animation-duration: 300s; animation-direction: reverse }
+@keyframes drift { to { transform: translate(240px, 120px) } }
+.app { position: relative }
+header { background: linear-gradient(180deg, rgba(40,50,60,.9), rgba(20,26,32,.85)); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 12px 14px }
+header h1 { font-size: 17px; letter-spacing: .12em; background: linear-gradient(90deg, #fff, #f4d58a 60%, #f4b63a); -webkit-background-clip: text; background-clip: text; color: transparent }
+.logo { width: 28px; height: 28px; flex: none; animation: bob 4s ease-in-out infinite; filter: drop-shadow(0 0 6px var(--glow)) }
+@keyframes bob { 50% { transform: translateY(-3px) rotate(4deg) } }
+nav { position: relative; background: rgba(18,24,30,.85); backdrop-filter: blur(8px) }
+nav button { border-bottom: 0; transition: color .25s }
+nav .ind { position: absolute; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: linear-gradient(90deg, #f4b63a, #ffd67a); box-shadow: 0 0 12px var(--glow); transition: left .35s var(--ease), width .35s var(--ease) }
+main { scroll-behavior: smooth }
+section.enter > * { animation: rise .45s var(--ease) backwards }
+section.enter > *:nth-child(2) { animation-delay: .04s } section.enter > *:nth-child(3) { animation-delay: .08s } section.enter > *:nth-child(4) { animation-delay: .12s } section.enter > *:nth-child(5) { animation-delay: .16s }
+@keyframes rise { from { opacity: 0; transform: translateY(10px) } }
+.card, .sum, .pr, .node, .stats > div, .stage, .verdict { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px) }
+.card { border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.25) }
+.btn { border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); transition: transform .12s, background .2s, box-shadow .2s }
+.btn:active, .qty button:active, .chips button:active { transform: scale(.94) }
+.btn.primary { position: relative; overflow: hidden; background: linear-gradient(180deg, #ffd06a, #f0a62a); border-color: #b97a12; box-shadow: 0 4px 18px var(--glow) }
+.btn.primary::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform: skewX(-20deg); animation: shine 3.5s ease-in-out infinite }
+@keyframes shine { 0%, 60% { left: -60% } 100% { left: 130% } }
+input[type=search], select, .qty input { border-radius: 8px; background: rgba(8,12,16,.7); transition: border-color .2s, box-shadow .2s }
+input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0 3px rgba(244,182,58,.18) }
+.chips button { border-radius: 16px; transition: background .2s, color .2s, transform .12s }
+.chips button[aria-pressed=true] { box-shadow: 0 0 12px var(--glow) }
+.pr { border-radius: 10px; position: relative; overflow: hidden; transition: background .25s, border-color .25s, transform .15s }
+.pr::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(#93d458, #4e9a2c); transform: scaleY(0); transition: transform .3s var(--ease) }
+.pr.has { background: linear-gradient(90deg, rgba(60,100,40,.35), rgba(30,38,46,.72)); border-color: rgba(147,212,88,.35) } .pr.has::before { transform: scaleY(1) }
+.qty button { border-radius: 8px; border: 1px solid var(--line); transition: transform .12s, background .2s } .qty button:hover { background: #33404b }
+.bump { animation: bump .3s var(--ease) } @keyframes bump { 40% { transform: scale(1.25); color: #f4b63a } }
+.plist .pr { animation: rise .35s var(--ease) backwards } .plist .pr:nth-child(n+12) { animation: none }
+.sum { border-radius: 10px; border: 1px solid var(--line) }
+.seg { border-radius: 10px; background: var(--panel) } .seg button { transition: background .25s, color .25s } .seg button[aria-pressed=true] { background: linear-gradient(180deg, #ffd06a, #f0a62a) }
+.bld .lv { border-radius: 8px } .bld .lv button { transition: background .2s } .bld .lv button[aria-pressed=true] { background: linear-gradient(180deg, #ffd06a, #f0a62a) }
+.node { border-radius: 10px; transition: background .25s, border-color .25s } .node.on { background: linear-gradient(90deg, rgba(60,100,40,.35), rgba(30,38,46,.72)); border-color: rgba(147,212,88,.35) }
+.node input { accent-color: #93d458 }
+/* run progress: a little rocket climbs the bar */
+.prog { position: relative; height: 10px; border-radius: 6px; overflow: visible; margin: 22px 4px 4px; background: rgba(8,12,16,.8); border: 1px solid var(--line) }
+.prog i { border-radius: 6px; background: linear-gradient(90deg, #f0a62a, #ffd67a, #f0a62a); background-size: 200% 100%; animation: flow 1.2s linear infinite; transition: width .35s var(--ease) }
+@keyframes flow { to { background-position: -200% 0 } }
+.prog .rk { position: absolute; top: -22px; width: 26px; height: 26px; margin-left: -13px; transition: left .35s var(--ease); animation: shake .25s linear infinite }
+@keyframes shake { 50% { transform: translate(0, -1px) } }
+#runNote { text-align: center; min-height: 1.4em; transition: opacity .3s }
+/* results */
+.verdict { border-radius: 12px; animation: pop .5s var(--ease) backwards } .verdict.ok { background: linear-gradient(135deg, rgba(70,120,40,.45), rgba(30,38,46,.75)); box-shadow: 0 0 0 1px rgba(147,212,88,.35), 0 0 28px rgba(147,212,88,.18) }
+.verdict.bad { background: linear-gradient(135deg, rgba(130,50,40,.45), rgba(30,38,46,.75)) }
+@keyframes pop { from { opacity: 0; transform: scale(.96) } }
+.stats > div { border-radius: 10px; border: 1px solid var(--line); animation: rise .45s var(--ease) backwards } .stats > div:nth-child(2) { animation-delay: .06s } .stats > div:nth-child(3) { animation-delay: .12s } .stats > div:nth-child(4) { animation-delay: .18s } .stats > div:nth-child(5) { animation-delay: .24s } .stats > div:nth-child(6) { animation-delay: .3s }
+.stats .v { font-variant-numeric: tabular-nums }
+#view { border-radius: 12px; border: 1px solid var(--line); background: radial-gradient(circle at 50% 35%, #233140, #0b0f14 70%); animation: pop .6s var(--ease) backwards }
+#result .card { animation: rise .5s var(--ease) backwards } #result .card:nth-of-type(2) { animation-delay: .1s } #result .card:nth-of-type(3) { animation-delay: .2s } #result .card:nth-of-type(4) { animation-delay: .3s }
+.stage { border-radius: 0 10px 10px 0; border-left-width: 4px; animation: slide .45s var(--ease) backwards } .stage:nth-child(3) { animation-delay: .08s } .stage:nth-child(4) { animation-delay: .16s } .stage:nth-child(5) { animation-delay: .24s }
+.stage:nth-of-type(4n+2) { border-left-color: #7cc4f0 } .stage:nth-of-type(4n+3) { border-left-color: #93d458 } .stage:nth-of-type(4n) { border-left-color: #c79bf0 }
+@keyframes slide { from { opacity: 0; transform: translateX(-12px) } }
+.ph { background: rgba(124,196,240,.12); border: 1px solid rgba(124,196,240,.25) }
+.toast { border-radius: 12px; background: rgba(15,20,26,.95); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: toastIn .35s var(--ease) }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px) } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
 </style>
 </head>
 <body>
 <div class="app">
-  <header><h1>Ship Optimizer</h1><button class="btn" id="btnMenu" type="button" hidden>Updates</button></header>
-  <nav role="tablist"><button role="tab" data-tab="parts" aria-selected="true">Parts</button><button role="tab" data-tab="career">Career</button><button role="tab" data-tab="goal">Goal</button><button role="tab" data-tab="result">Result</button></nav>
+  <header><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#b9c4cc"/></linearGradient></defs><path d="M16 2c5 4 7 10 6 18h-12C9 12 11 6 16 2z" fill="url(#lg)"/><circle cx="16" cy="12" r="2.6" fill="#2b6fa8" stroke="#16232e"/><path d="M10 16l-4 7 4-1zM22 16l4 7-4-1z" fill="#f0a62a"/><path d="M12.5 21h7l-1.2 3h-4.6z" fill="#4a5057"/><path d="M14 24h4l-2 6z" fill="#ffb347"><animate attributeName="d" values="M14 24h4l-2 6z;M14 24h4l-2 4.5z;M14 24h4l-2 6z" dur=".4s" repeatCount="indefinite"/></path></svg><h1>Ship Optimizer</h1><button class="btn" id="btnMenu" type="button" hidden>Updates</button></header>
+  <nav role="tablist"><button role="tab" data-tab="parts" aria-selected="true">Parts</button><button role="tab" data-tab="career">Career</button><button role="tab" data-tab="goal">Goal</button><button role="tab" data-tab="result">Result</button><span class="ind" id="navInd"></span></nav>
   <main>
     <section id="tab-parts">
       <div class="sum" id="invSum"></div>
@@ -84,7 +149,7 @@ label.ck { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px }
         <label class="ck"><span style="min-width:120px">Search effort</span><select id="effort" style="width:auto"><option value="1">Quick</option><option value="2" selected>Normal</option><option value="4">Thorough</option></select></label>
       </div>
       <button class="btn primary" id="btnRun" type="button" style="width:100%;padding:12px">Find the best ship</button>
-      <div class="prog" id="prog" hidden><i></i></div>
+      <div class="prog" id="prog" hidden><i></i><svg class="rk" id="progRk" viewBox="0 0 32 32" aria-hidden="true"><g transform="rotate(90 16 16)"><path d="M16 2c5 4 7 10 6 18h-12C9 12 11 6 16 2z" fill="#e8edf0"/><circle cx="16" cy="12" r="2.4" fill="#2b6fa8"/><path d="M10 16l-4 7 4-1zM22 16l4 7-4-1z" fill="#f0a62a"/><path d="M13.5 21h5l-2.5 9z" fill="#ffb347"/></g></svg></div>
       <p class="note" id="runNote"></p>
       <div class="card"><h3>How it decides</h3><p class="note" style="margin:0">It tries thousands of arrangements of your parts and keeps the one that reaches the goal with the most Δv left over. Rockets are scored stage by stage with the rocket equation against the stock Δv map (3,400 m/s to low Kerbin orbit, then transfer, capture, landing and return), with sea-level Isp low in the atmosphere and minimum thrust-to-weight for each part of the trip (1.25 off the pad, 2.0 for landings). Spaceplanes are flown in a 2D simulation: runway takeoff, jet climb with intake air limits, rocket ascent to 80 km, circularisation. Part figures are from the KSP wiki; a few are estimates and are marked.</p></div>
     </section>
@@ -895,10 +960,12 @@ $('cats').addEventListener('click', e => { const b = e.target.closest('[data-cat
 $('q').addEventListener('input', renderList);
 $('btnMine').onclick = () => { st.mine = !st.mine; $('btnMine').setAttribute('aria-pressed', st.mine); $('btnMine').classList.toggle('primary', st.mine); renderList(); save(); };
 $('btnClear').onclick = () => { if (!Object.keys(st.inv).length) return; st.inv = {}; renderList(); save(); toast('Cleared your parts.'); };
-$('plist').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; const id = b.dataset.id; st.inv[id] = Math.max(0, (st.inv[id] || 0) + +b.dataset.d); if (!st.inv[id]) delete st.inv[id]; const row = b.closest('.pr'); row.querySelector('input').value = st.inv[id] || 0; row.classList.toggle('has', !!st.inv[id]); renderSum(); save(); });
+$('plist').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; const id = b.dataset.id; st.inv[id] = Math.max(0, (st.inv[id] || 0) + +b.dataset.d); if (!st.inv[id]) delete st.inv[id]; const row = b.closest('.pr'), inp = row.querySelector('input'); inp.value = st.inv[id] || 0; inp.classList.remove('bump'); void inp.offsetWidth; inp.classList.add('bump'); row.classList.toggle('has', !!st.inv[id]); renderSum(); save(); });
 $('plist').addEventListener('change', e => { const i = e.target.closest('input[data-id]'); if (!i) return; const v = Math.max(0, Math.min(99, parseInt(i.value, 10) || 0)); if (v) st.inv[i.dataset.id] = v; else delete st.inv[i.dataset.id]; i.value = v; i.closest('.pr').classList.toggle('has', !!v); renderSum(); save(); });
 // ---- tabs
-function setTab(t) { if (st.tab !== t) document.querySelector('main').scrollTop = 0; st.tab = t; document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'parts') { if (!document.querySelector('#cats [aria-pressed=true]') || (st.cat !== 'All' && !PARTS.some(p => p.cat === st.cat && !locked(p.id)))) st.cat = 'All'; renderCats(); renderList(); } }
+function moveInd() { const b = document.querySelector('[data-tab][aria-selected=true]'), i = $('navInd'); if (b && i) { i.style.left = (b.offsetLeft + b.offsetWidth * .18) + 'px'; i.style.width = (b.offsetWidth * .64) + 'px'; } }
+function enter(id) { const el = $(id); el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); clearTimeout(enter.t); enter.t = setTimeout(() => el.classList.remove('enter'), 900); }
+function setTab(t) { const changed = st.tab !== t; if (changed) document.querySelector('main').scrollTop = 0; st.tab = t; requestAnimationFrame(moveInd); if (changed) setTimeout(() => enter('tab-' + t)); document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'parts') { if (!document.querySelector('#cats [aria-pressed=true]') || (st.cat !== 'All' && !PARTS.some(p => p.cat === st.cat && !locked(p.id)))) st.cat = 'All'; renderCats(); renderList(); } }
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 // ---- goal tab
 // goal: any stock body, and what to do there
@@ -948,13 +1015,15 @@ $('btnRun').onclick = async () => {
   if ($('optRocket').checked) kinds.push('rocket');
   const U2 = usable(); if ($('optPlane').checked && Object.keys(U2).some(id => BY[id].jet) && Object.keys(U2).some(id => BY[id].wing)) kinds.push('plane');
   if (!kinds.length) { toast($('optPlane').checked ? 'Spaceplanes need jets and wings in your parts.' : 'Pick rockets or spaceplanes.'); return; }
-  $('btnRun').disabled = true; $('prog').hidden = false; const bar = $('prog').firstElementChild; bar.style.width = '0';
+  $('btnRun').disabled = true; $('prog').hidden = false; const bar = $('prog').firstElementChild, rk = $('progRk'); bar.style.width = '0'; rk.style.left = '0';
+  const quips = ['Bolting on tanks…', 'Asking Jeb for advice…', 'Rearranging stages…', 'Checking thrust-to-weight…', 'Adding more boosters…', 'Running the numbers…'];
+  let qi = 0; const qt = setInterval(() => { $('runNote').style.opacity = 0; setTimeout(() => { $('runNote').textContent = quips[qi++ % quips.length]; $('runNote').style.opacity = 1; }, 250); }, 2200);
   last = { rocket: null, plane: null };
   for (let i = 0; i < kinds.length; i++) {
     $('runNote').textContent = kinds[i] === 'plane' ? 'Flying spaceplane designs…' : 'Trying rocket arrangements…';
-    last[kinds[i]] = await runKind(kinds[i], eff, p => { bar.style.width = ((i + p) / kinds.length * 100) + '%'; });
+    last[kinds[i]] = await runKind(kinds[i], eff, p => { const w = ((i + p) / kinds.length * 100) + '%'; bar.style.width = w; rk.style.left = w; });
   }
-  $('btnRun').disabled = false; $('prog').hidden = true; $('runNote').textContent = '';
+  clearInterval(qt); $('btnRun').disabled = false; $('prog').hidden = true; $('runNote').textContent = '';
   const good = k => last[k] && !last[k].error ? last[k].r.margin : -Infinity;
   view = good('plane') > good('rocket') ? 'plane' : 'rocket';
   renderResult(); setTab('result');
@@ -967,7 +1036,17 @@ function renderResult() {
   if (!R) { el.innerHTML = html + '<p class="note">Nothing yet.</p>'; return; }
   if (R.error) { el.innerHTML = html + `<div class="verdict bad"><b>Can't build one</b>${esc(R.error)}</div>`; bindSeg(); return; }
   html += view === 'plane' ? planeHtml(R) : rocketHtml(R);
-  el.innerHTML = html; bindSeg(); draw3d(R);
+  el.innerHTML = html; bindSeg(); draw3d(R); countUp(el);
+}
+// numbers in the result tick up from zero
+function countUp(root) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('.stats .v').forEach(v => {
+    const txt = v.textContent, m = txt.match(/-?[\d,]+(\.\d+)?/); if (!m) return;
+    const end = parseFloat(m[0].replace(/,/g, '')), dec = (m[1] || '').length - (m[1] ? 1 : 0), t0 = performance.now();
+    const step = now => { const k = Math.min(1, (now - t0) / 700), e = 1 - Math.pow(1 - k, 3); v.textContent = txt.replace(m[0], fmt(end * e, dec)); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
 }
 const mlabel = R => !R || R.error ? '' : ` (${R.r.margin >= 0 ? '+' : ''}${fmt(R.r.margin)} m/s)`;
 function bindSeg() { document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { view = b.dataset.view; renderResult(); }); }
@@ -1098,7 +1177,7 @@ function resize3d() { if (!R3) return; const c = $('view'); if (!c) return; cons
 function draw3d(R) {
   const c = $('view'); if (!c || !window.THREE) { if (c) c.replaceWith(Object.assign(document.createElement('p'), { className: 'note', textContent: 'The 3D picture needs an internet connection the first time.' })); return; }
   if (R3) { R3.r.dispose(); cancelAnimationFrame(R3.raf); }
-  const r = new THREE.WebGLRenderer({ canvas: c, antialias: true }); r.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  const r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true }); r.setClearColor(0x000000, 0); r.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
   scene.add(new THREE.HemisphereLight(0xdfeaff, 0x3a4048, 0.8)); const sun = new THREE.DirectionalLight(0xffffff, 0.9); sun.position.set(3, 5, 4); scene.add(sun);
   const g = new THREE.Group(); scene.add(g);
@@ -1185,7 +1264,7 @@ window.__appUpToDate = v => toast(v < 0 ? "Couldn't reach the update server." : 
 window.__appSaved = (ok, m) => toast(m || (ok ? 'Saved.' : 'Not saved.'));
 window.__appBack = () => { if (st.tab !== 'parts') { setTab(st.tab === 'result' ? 'goal' : 'parts'); return true; } return false; };
 if (AB && AB.checkNow) { $('btnMenu').hidden = false; $('btnMenu').onclick = () => { AB.checkNow(); toast('Checking for updates…'); }; }
-window.addEventListener('resize', resize3d);
+window.addEventListener('resize', () => { resize3d(); moveInd(); });
 st.career = Object.assign({ on: false, nodes: ['Start'], vab: 1, sph: 1, pad: 1, runway: 1, rnd: 1 }, st.career || {});
 renderCats(); renderList(); setTab(st.tab === 'result' ? 'goal' : st.tab);
 $('btnMine').setAttribute('aria-pressed', st.mine); $('btnMine').classList.toggle('primary', !!st.mine);
