@@ -1,8 +1,8 @@
 {
-  "web": 30,
+  "web": 31,
   "apk": 3,
-  "sha256": "210f989bd4714c9879a54d7d39c07ce4339f52b7fca813cd288b4c22e6ce848e",
-  "notes": "Design rules: sea-level engines at liftoff, solid-booster TWR, stack widths, fuel matching, burn length, lander footprint and legs, parachute and heat shield; planes: elevons, tail fin, mirror pairs, gear load, landing speed, max-Q. Every search tests at least 5000 designs; results list the checks.",
+  "sha256": "6f25040590219817df7626ea130a8a9bffe3bb8eee990d9534b3b11f98f2787a",
+  "notes": "Space stations: pick modules (cabins, labs, cupola), the app adds docking ports, solar panels, batteries and RCS, splits it over launches and plans the docking order. Mods: MechJeb ascent settings and rendezvous/docking steps, Kerbal Engineer stage readout, launch scored with a drag simulation.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

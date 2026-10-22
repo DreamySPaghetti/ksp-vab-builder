@@ -127,6 +127,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
 .toast { border-radius: 12px; background: rgba(15,20,26,.95); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: toastIn .35s var(--ease) }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px) } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
+.ker{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}.ker th,.ker td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line)}.ker th:first-child,.ker td:first-child{text-align:left}.ker th{color:var(--muted);font-weight:500}.ker .tot td{font-weight:600;border-bottom:0}
 .checks{list-style:none;margin:0;padding:0;display:grid;gap:4px}.checks li.ok{color:var(--good)}.checks li.no{color:var(--bad)}
 </style>
 </head>
@@ -146,7 +147,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
       <div id="careerBody"></div>
     </section>
     <section id="tab-goal" hidden>
-      <div class="card"><h3>Goal</h3><div class="row" style="flex-wrap:nowrap"><select id="dest" aria-label="Destination"></select><select id="mission" aria-label="Mission"></select></div><div id="airBox" hidden style="margin-top:8px;display:grid;gap:8px"></div><p class="note" id="goalDv" style="margin:8px 0 0"></p>
+      <div class="card"><h3>Goal</h3><div class="row" style="flex-wrap:nowrap"><select id="dest" aria-label="Destination"></select><select id="mission" aria-label="Mission"></select></div><div id="airBox" hidden style="margin-top:8px;display:grid;gap:8px"></div><div id="stnBox" hidden style="margin-top:8px"></div><p class="note" id="goalDv" style="margin:8px 0 0"></p>
         <div class="seg" role="group" aria-label="Parts to use" style="margin-top:12px"><button type="button" data-src="mine">My parts</button><button type="button" data-src="auto">Any parts (auto)</button></div>
         <label class="ck"><span style="min-width:120px">Best means</span><select id="objective" style="width:auto"><option value="margin">Most Δv to spare</option><option value="cheap">Cheapest that makes it</option><option value="light">Lightest that makes it</option><option value="parts">Fewest parts</option><option value="science">Most science</option></select></label>
         <p class="note" id="srcNote" style="margin:6px 0 0"></p>
@@ -157,7 +158,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
       <button class="btn primary" id="btnRun" type="button" style="width:100%;padding:12px">Find the best ship</button>
       <div class="prog" id="prog" hidden><i></i><svg class="rk" id="progRk" viewBox="0 0 32 32" aria-hidden="true"><g transform="rotate(90 16 16)"><path d="M16 2c5 4 7 10 6 18h-12C9 12 11 6 16 2z" fill="#e8edf0"/><circle cx="16" cy="12" r="2.4" fill="#2b6fa8"/><path d="M10 16l-4 7 4-1zM22 16l4 7-4-1z" fill="#f0a62a"/><path d="M13.5 21h5l-2.5 9z" fill="#ffb347"/></g></svg></div>
       <p class="note" id="runNote"></p>
-      <div class="card"><h3>How it decides</h3><p class="note" style="margin:0">It tries thousands of arrangements of your parts and keeps the one that reaches the goal with the most Δv left over. Rockets are scored stage by stage with the rocket equation against the stock Δv map (3,400 m/s to low Kerbin orbit, then transfer, capture, landing and return), with sea-level Isp low in the atmosphere and minimum thrust-to-weight for each part of the trip (1.25 off the pad, 2.0 for landings). Spaceplanes are flown in a 2D simulation: runway takeoff, jet climb with intake air limits, rocket ascent to 80 km, circularisation. Part figures are from the KSP wiki; a few are estimates and are marked.</p></div>
+      <div class="card"><h3>How it decides</h3><p class="note" style="margin:0">It tries thousands of arrangements of your parts and keeps the one that reaches the goal with the most Δv left over. Rockets are scored stage by stage with the rocket equation: the climb off Kerbin is flown in a 2D simulation with drag (MechJeb's classic ascent profile, drag from frontal area and a Mach curve as in Project-Atmospheric-Drag), and the rest of the trip uses the stock Δv map (then transfer, capture, landing and return), with sea-level Isp low in the atmosphere and minimum thrust-to-weight for each part of the trip (1.25 off the pad, 2.0 for landings). Spaceplanes are flown in a 2D simulation: runway takeoff, jet climb with intake air limits, rocket ascent to 80 km, circularisation. Part figures are from the KSP wiki; a few are estimates and are marked.</p></div>
     </section>
     <section id="tab-result" hidden><div id="result"><p class="note">Pick your parts, choose a goal, then run.</p></div></section>
   </main>
@@ -343,6 +344,34 @@ leg('ly05', 'LY-05 Steerable Landing Gear', 0.025, 200, { gear: true, a: 1 });
 leg('ly10', 'LY-10 Small Landing Gear', 0.045, 400, { gear: true });
 leg('ly35', 'LY-35 Medium Landing Gear', 0.2, 600, { gear: true, a: 1 });
 leg('ly60', 'LY-60 Large Landing Gear', 0.45, 1500, { gear: true, a: 1 });
+// space station parts (KSP wiki figures; ≈ where estimated). stn: hab | port | power | battery | rcs | mono
+const stn = (id, t, m, c, d, h, kind, o = {}) => add('Station', id, t, Object.assign({ m, dry: m, $: c, d, h, stn: kind }, o));
+stn('hitchhiker', 'PPD-10 Hitchhiker Storage Container', 2.5, 3500, 2.5, 1.9, 'hab', { crew: 4, tech: 'Space Exploration' });
+stn('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.8, 'hab', { crew: 2, lab: true, ec: 1.5, tech: 'Advanced Exploration', a: 1 });
+stn('cupola', 'PPD-12 Cupola Module', 4.5, 3200, 1.25, 1.5, 'hab', { crew: 1, tech: 'Advanced Exploration', a: 1 });
+stn('mk1cabin', 'Mk1 Crew Cabin', 0.65, 600, 1.25, 1.9, 'hab', { crew: 2, tech: 'Aviation', a: 1 });
+stn('portJr', 'Clamp-O-Tron Jr. Docking Port', 0.02, 280, 0.625, 0.2, 'port', { tech: 'Precision Engineering' });
+stn('port', 'Clamp-O-Tron Docking Port', 0.05, 280, 1.25, 0.3, 'port', { tech: 'Advanced Construction' });
+stn('portIn', 'Clamp-O-Tron Inline Docking Port', 0.08, 340, 1.25, 0.6, 'port', { tech: 'Specialized Construction', a: 1 });
+stn('portSh', 'Clamp-O-Tron Shielded Docking Port', 0.1, 400, 1.25, 0.6, 'port', { tech: 'Specialized Construction', a: 1 });
+stn('portSr', 'Clamp-O-Tron Sr. Docking Port', 0.1, 980, 2.5, 0.4, 'port', { tech: 'Specialized Construction' });
+stn('oxstat', 'OX-STAT Photovoltaic Panels', 0.005, 75, 'r', 0, 'power', { ecGen: 0.35, tech: 'Electrics' });
+stn('ox4l', 'OX-4L 1x6 Photovoltaic Panels', 0.0175, 380, 'r', 0, 'power', { ecGen: 1.64, tech: 'Advanced Electrics' });
+stn('spl', 'SP-L 1x6 Photovoltaic Panels', 0.025, 440, 'r', 0, 'power', { ecGen: 1.64, tech: 'Advanced Electrics' });
+stn('gigantor', 'Gigantor XL Solar Array', 0.3, 3000, 'r', 0, 'power', { ecGen: 24.4, tech: 'High-Power Electrics' });
+stn('rtg', 'PB-NUK Radioisotope Thermoelectric Generator', 0.08, 23300, 'r', 0, 'power', { ecGen: 0.75, rtg: true, tech: 'Specialized Electrics' });
+stn('z100', 'Z-100 Rechargeable Battery Pack', 0.005, 80, 'r', 0, 'battery', { bat: 100, tech: 'Electrics' });
+stn('z200', 'Z-200 Rechargeable Battery Bank', 0.01, 360, 'r', 0, 'battery', { bat: 200, tech: 'Electrics' });
+stn('z400', 'Z-400 Rechargeable Battery', 0.02, 550, 'r', 0, 'battery', { bat: 400, tech: 'Advanced Electrics' });
+stn('z1k', 'Z-1k Rechargeable Battery Bank', 0.05, 880, 'r', 0, 'battery', { bat: 1000, tech: 'Advanced Electrics' });
+stn('z4k', 'Z-4K Rechargeable Battery Bank', 0.2, 4500, 'r', 0, 'battery', { bat: 4000, tech: 'High-Power Electrics' });
+stn('rv105', 'RV-105 RCS Thruster Block', 0.05, 620, 'r', 0, 'rcs', { tech: 'Advanced Flight Control' });
+stn('pa7', 'Place-Anywhere 7 Linear RCS Port', 0.02, 250, 'r', 0, 'rcs', { tech: 'Advanced Flight Control', a: 1 });
+stn('fr10', 'FL-R10 RCS Fuel Tank', 0.1, 200, 0.625, 0.3, 'mono', { dry: 0.02, mono: 20, tech: 'Advanced Flight Control', a: 1 });
+stn('fr25', 'FL-R25 RCS Fuel Tank', 0.75, 600, 1.25, 0.5, 'mono', { dry: 0.15, mono: 150, tech: 'Specialized Control', a: 1 });
+stn('fr1', 'FL-R1 RCS Fuel Tank', 3.4, 1300, 2.5, 1, 'mono', { dry: 0.4, mono: 750, tech: 'Specialized Control', a: 1 });
+stn('stratR', 'Stratus-V Roundified Monopropellant Tank', 0.2, 200, 'r', 0, 'mono', { dry: 0.04, mono: 40, tech: 'Advanced Flight Control', a: 1 });
+stn('stratC', 'Stratus-V Cylindrified Monopropellant Tank', 0.375, 300, 'r', 0, 'mono', { dry: 0.075, mono: 75, tech: 'Specialized Control', a: 1 });
 // Stock tech tree (KSP wiki, Technology tree page): [name, tier, science cost, required nodes, any one of them (1) or all (0)]
 const TECH = [["Start",1,0,[],1],["Basic Rocketry",2,5,["Start"],1],["Engineering 101",2,5,["Start"],1],["Survivability",3,15,["Engineering 101"],1],["Stability",3,18,["Engineering 101","Basic Rocketry"],1],["General Rocketry",3,20,["Basic Rocketry"],1],["Aviation",4,45,["Stability"],1],["Basic Science",4,45,["Survivability"],1],["Flight Control",4,45,["Survivability","Stability"],1],["Advanced Rocketry",4,45,["General Rocketry"],1],["General Construction",4,45,["Stability","General Rocketry"],1],["Propulsion Systems",5,90,["Advanced Rocketry"],1],["Space Exploration",5,90,["Basic Science"],1],["Advanced Flight Control",5,90,["Flight Control"],1],["Landing",5,90,["Flight Control","Aviation"],1],["Aerodynamics",5,90,["Aviation","General Construction"],1],["Electrics",5,90,["Basic Science"],1],["Heavy Rocketry",5,90,["Advanced Rocketry"],1],["Fuel Systems",5,90,["Advanced Rocketry","General Construction"],1],["Advanced Construction",5,90,["General Construction"],1],["Miniaturization",5,90,["Basic Science"],1],["Actuators",6,160,["Advanced Construction"],1],["Command Modules",6,160,["Space Exploration","Advanced Flight Control"],1],["Heavier Rocketry",6,160,["Heavy Rocketry"],1],["Precision Engineering",6,160,["Miniaturization","Electrics"],1],["Advanced Exploration",6,160,["Space Exploration"],1],["Specialized Control",6,160,["Advanced Flight Control"],1],["Advanced Landing",6,160,["Landing"],1],["Supersonic Flight",6,160,["Aerodynamics"],1],["Adv. Fuel Systems",6,160,["Propulsion Systems","Fuel Systems"],1],["Advanced Electrics",6,160,["Electrics"],1],["Specialized Construction",6,160,["Advanced Construction"],1],["Precision Propulsion",6,160,["Propulsion Systems"],1],["Advanced Aerodynamics",6,160,["Aerodynamics"],1],["Heavy Landing",7,300,["Advanced Landing"],1],["Scanning Tech",7,300,["Advanced Exploration","Precision Engineering"],1],["Unmanned Tech",7,300,["Precision Engineering"],1],["Nuclear Propulsion",7,300,["Adv. Fuel Systems","Heavier Rocketry"],0],["Advanced MetalWorks",7,300,["Specialized Construction"],1],["Field Science",7,300,["Advanced Landing","Advanced Exploration"],1],["High Altitude Flight",7,300,["Supersonic Flight"],1],["Large Volume Containment",7,300,["Adv. Fuel Systems","Specialized Construction"],1],["Composites",7,300,["Specialized Construction"],1],["Electronics",7,300,["Precision Engineering","Advanced Electrics"],1],["High-Power Electrics",7,300,["Advanced Electrics"],1],["Heavy Aerodynamics",7,300,["Advanced Aerodynamics"],1],["Ion Propulsion",8,550,["Scanning Tech","Unmanned Tech"],0],["Hypersonic Flight",8,550,["High Altitude Flight"],1],["Nanolathing",8,550,["Advanced MetalWorks"],1],["Advanced Unmanned Tech",8,550,["Unmanned Tech"],1],["Meta-Materials",8,550,["Composites"],1],["Very Heavy Rocketry",8,550,["Large Volume Containment","Heavier Rocketry"],1],["Advanced Science Tech",8,550,["Scanning Tech","Field Science"],1],["Advanced Motors",8,550,["Field Science"],1],["Specialized Electrics",8,550,["High-Power Electrics"],1],["High-Performance Fuel Systems",8,550,["Large Volume Containment"],1],["Experimental Aerodynamics",8,550,["Heavy Aerodynamics"],1],["Automation",8,550,["Unmanned Tech","Electronics"],1],["Aerospace Tech",9,1000,["Hypersonic Flight"],1],["Large Probes",9,1000,["Advanced Unmanned Tech","Automation"],1],["Experimental Science",9,1000,["Advanced Science Tech"],1],["Experimental Motors",9,1000,["Advanced Motors"],1],["Experimental Electrics",9,1000,["Specialized Electrics"],1]];
 const PART_TECH = {"mk1pod":"Start","mk1-3pod":"Command Modules","landerSmall":"Advanced Flight Control","landerMk2":"Command Modules","cockpitMk2":"Supersonic Flight","cockpitMk3":"Heavy Aerodynamics","hecs2":"Advanced Unmanned Tech","mk2drone":"Automation","oscarB":"Propulsion Systems","flt100":"Basic Rocketry","flt200":"General Rocketry","flt400":"Advanced Rocketry","flt800":"Fuel Systems","x200-8":"Fuel Systems","x200-16":"Fuel Systems","x200-32":"Fuel Systems","jumbo64":"Adv. Fuel Systems","s3-3600":"Large Volume Containment","s3-7200":"Large Volume Containment","s3-14400":"High-Performance Fuel Systems","r4":"Precision Propulsion","r11":"Propulsion Systems","r12":"Precision Propulsion","mk2lfoS":"Supersonic Flight","mk3lfoS":"Experimental Aerodynamics","mk3lfo":"Experimental Aerodynamics","mk3lfoL":"Experimental Aerodynamics","mk2lfS":"Supersonic Flight","mk3lfS":"Heavy Aerodynamics","mk3lfL":"Experimental Aerodynamics","ncs":"Aerodynamics","spider":"Precision Propulsion","twitch":"Precision Propulsion","thud":"Advanced Rocketry","ant":"Propulsion Systems","spark":"Propulsion Systems","terrier":"Advanced Rocketry","reliant":"General Rocketry","swivel":"Basic Rocketry","vector":"Very Heavy Rocketry","dart":"Hypersonic Flight","nerv":"Nuclear Propulsion","poodle":"Heavy Rocketry","skipper":"Heavy Rocketry","mainsail":"Heavier Rocketry","twinboar":"Heavier Rocketry","rhino":"Very Heavy Rocketry","mammoth":"Very Heavy Rocketry","puff":"Precision Propulsion","rapier":"Aerospace Tech","shrimp":"Precision Propulsion","mite":"Propulsion Systems","flea":"Start","hammer":"Basic Rocketry","thumper":"General Rocketry","kickback":"Heavy Rocketry","thoroughbred":"Heavier Rocketry","clydesdale":"Very Heavy Rocketry","panther":"Supersonic Flight","whiplash":"Hypersonic Flight","goliath":"Heavy Aerodynamics","circularS":"Aviation","ramp":"High Altitude Flight","shockcone":"Hypersonic Flight","xmg50":"Aerodynamics","dsi":"High Altitude Flight","precooler":"Hypersonic Flight","connA":"Aerodynamics","connB":"Aviation","connD":"Advanced Aerodynamics","deltaS":"Advanced Aerodynamics","structA":"Supersonic Flight","structD":"Advanced Aerodynamics","sweptA":"Advanced Aerodynamics","swept":"Aviation","bigSdelta":"Experimental Aerodynamics","bigSstrake":"Experimental Aerodynamics","fat455":"Heavy Aerodynamics","elevon1":"Aviation","elevon3":"Advanced Aerodynamics","elevon5":"Advanced Aerodynamics","bigSelevon1":"Experimental Aerodynamics","bigSelevon2":"Experimental Aerodynamics","canard":"Advanced Aerodynamics","canardAdv":"Hypersonic Flight","fat455tail":"Heavy Aerodynamics","bigStail":"Experimental Aerodynamics","basicfin":"Start","avt1":"Stability","avr8":"Flight Control","deltadeluxe":"Flight Control","noseCone":"Stability","noseConeS":"Aerodynamics","noseCone25":"Advanced Construction","td06":"Precision Engineering","td12":"Engineering 101","td25":"General Construction","td37":"Large Volume Containment","tt38k":"Stability","tt70":"Advanced Construction","fla10":"Miniaturization","kerbodyneAdp":"Large Volume Containment","mk3to25":"Heavy Aerodynamics","mk3toMk2":"Experimental Aerodynamics","mk16":"Start","mk16xl":"Landing","mk2r":"Survivability","mk25":"Advanced Landing","mk12r":"Survivability","hs125":"Survivability","hs25":"Landing","lt05":"Survivability","lt1":"Landing","lt2":"Advanced Landing","ly10":"Landing","ly35":"Advanced Landing","ly60":"Heavy Landing","cockpitMk1":"Aviation","juno":"Aviation","mk0lf":"Aviation","mk1lf":"Aviation","connE":"Aviation","structC":"Aviation","ly01":"Aviation","ly05":"Aviation","tailfin":"Aviation","cockpitMk1i":"Aerodynamics","wheesley":"Aerodynamics","nacelle":"Aerodynamics","connC":"Aerodynamics","structB":"Aerodynamics","sweptB":"Aerodynamics","circular":"Aerodynamics","okto":"Electrics","hecs":"Precision Engineering","rc001s":"Advanced Unmanned Tech","rcl01":"Large Probes","mk2lfo":"High Altitude Flight","mk2lf":"High Altitude Flight","mk3lf":"Heavy Aerodynamics","delta":"Advanced Aerodynamics","strake":"Supersonic Flight","elevon2":"Advanced Aerodynamics","rockomaxAdp":"General Construction","mk2to125":"Supersonic Flight"};
@@ -367,10 +396,7 @@ sci('magneto', 'Magnetometer Boom', 0.05, 2800, 'r', 0.4, 'Electronics', { a: 1 
 sci('gravioli', 'GRAVMAX Negative Gravioli Detector', 0.005, 8000, 'r', 0.2, 'Advanced Science Tech');
 sci('afsv', 'Atmospheric Fluid Spectro-Variometer', 0.005, 6500, 'r', 0.3, 'Scanning Tech', { a: 1 });
 sci('weather', 'PD-3 Weather Analyzer', 0.05, 2500, 'r', 0.3, 'Precision Engineering', { a: 1 });
-sci('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.6, 'Advanced Exploration');
 sci('comm16', 'Communotron 16', 0.005, 300, 'r', 0.6, 'Engineering 101');
-sci('z100', 'Z-100 Rechargeable Battery Pack', 0.005, 80, 'r', 0.2, 'Basic Science');
-sci('oxstat', 'OX-STAT Photovoltaic Panels', 0.005, 75, 'r', 0.1, 'Electrics');
 // engine gimbal range (degrees; stock configs): the steering a rocket has off the pad. 0 = fixed nozzle.
 const GIMBAL = { spider: 10, twitch: 8, thud: 8, ant: 0, spark: 3, terrier: 4, reliant: 0, swivel: 3, vector: 10.5, dart: 0, nerv: 1, poodle: 4.5, skipper: 2, mainsail: 2, twinboar: 1.5, rhino: 4, mammoth: 1, puff: 6, rapier: 3, thoroughbred: 2.5, clydesdale: 2.5 };
 // reaction-wheel torque (kN·m, KSP wiki Reaction wheel page)
@@ -416,7 +442,7 @@ const BODY = {
   Eeloo: { parent: 'Kerbol', int: 1140, cap: 0, low: 1370, land: 620, g: 1.69 },
 };
 const KERBIN_ESCAPE = 950;
-const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return' };
+const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return', station: 'space station' };
 const esc0 = s => String(s);
 // ---- science (stock values as listed on the KSP wiki's science pages): experiment base value, where it works,
 // and how much a transmission is worth compared to bringing the data home
@@ -480,7 +506,7 @@ function phasesOf(goal) {
   }
   return out.filter(p => p.dv > 0);
 }
-const goalName = goal => { const [b, m] = goal.split(':'); return b === 'Kerbin' ? 'Low Kerbin orbit' : `${b} ${MISSIONS[m]}`; };
+const goalName = goal => { const [b, m] = goal.split(':'); return b === 'Kerbin' ? (m === 'station' ? 'Kerbin space station' : 'Low Kerbin orbit') : `${b} ${MISSIONS[m]}`; };
 const goalInfo = goal => { const [b, m] = goal.split(':'); return { body: b, mission: m, ret: m === 'landReturn' || m === 'orbitReturn', lands: m === 'land' || m === 'landReturn', name: goalName(goal) }; };
 // kept for older saves and callers
 const GOALS = new Proxy({}, { get: (_, k) => typeof k === 'string' && k.includes(':') ? Object.assign(goalInfo(k), { ph: phasesOf(k).map(p => p.k) }) : undefined });
@@ -491,6 +517,44 @@ function twrNeed(ph, cum) {
   if (ph.k === 'land') return ph.chute ? 0 : 2.0; // parachutes and air do the work on Eve, Duna and Laythe
   if (ph.k === 'ascent') return 1.6;
   return 0.15;
+}
+
+// ---- launch from Kerbin, flown in 2D (rotating planet, real-shaped air, drag): what the climb really costs this design.
+// Air: US Standard Atmosphere with heights ×0.8014, as KSP builds Kerbin's. Drag: frontal area × Cd × a Mach curve, the
+// way the open-source Project-Atmospheric-Drag rebuilt KSP's drag cubes. Guidance: MechJeb's classic ascent profile
+// (straight up, then the pitch follows a power curve of altitude), throttled to hold dynamic pressure under 40 kPa.
+const USSA = [[0, 288.15, -0.0065, 101325], [11000, 216.65, 0, 22632.06], [20000, 216.65, 0.001, 5474.889], [32000, 228.65, 0.0028, 868.0187], [47000, 270.65, 0, 110.9063], [51000, 270.65, -0.0028, 66.93887], [71000, 214.65, -0.002, 3.95642]];
+function kAir(h) {
+  if (h >= 70000) return { p: 0, rho: 0, a: 300 };
+  const H = Math.max(0, h) / 0.8014; let L = USSA[0]; for (const l of USSA) if (H >= l[0]) L = l;
+  const [hb, Tb, lr, Pb] = L, dh = H - hb, T = Tb + lr * dh, P = lr === 0 ? Pb * Math.exp(-0.0341632 * dh / Tb) : Pb * Math.pow(Tb / T, 0.0341632 / lr);
+  return { p: P / 101325, rho: P / (287.05 * T), a: Math.sqrt(1.4 * 287.05 * T) };
+}
+const dragMach = M => M < 0.85 ? 1 + 0.25 * M / 0.85 : M < 1.1 ? 1.25 + 1.25 * (M - 0.85) / 0.25 : M < 2 ? 2.5 - 0.6 * (M - 1.1) / 0.9 : Math.max(1.2, 1.9 - 0.5 * (M - 2) / 3);
+const KR = 600000, KMU = 3.5316e12, KW = 2 * Math.PI / 21549.425;
+function ascent(segs, area, cd) {
+  const twr0 = segs[0] ? segs[0].ta / (segs[0].m0 * 9.81) : 0;
+  const turnStart = twr0 >= 1.8 ? 500 : twr0 >= 1.4 ? 1000 : 1500, shape = 0.35 + 0.2 * Math.min(1, Math.max(0, (twr0 - 1.2) / 1)), turnEnd = 60000, target = 80000, qMax = 40000;
+  const out = { twr0, turnStart, shape, turnEnd, target, qMax, maxQ: 0, t: 0, dv: 9999, ok: false };
+  if (!segs.length || twr0 < 1.02) { out.msg = 'too heavy to leave the pad'; return out; }
+  let x = KR + 70, y = 0, vx = 0, vy = KW * x, t = 0, dv = 0, si = 0, sg = segs[0], left = sg.prop, m = sg.m0;
+  while (t < 1500) {
+    const r = Math.hypot(x, y), ux = x / r, uy = y / r, ex = -uy, ey = ux, h = r - KR;
+    const v2 = vx * vx + vy * vy, en = v2 / 2 - KMU / r, hh = x * vy - y * vx, sma = -KMU / (2 * en), ecc = Math.sqrt(Math.max(0, 1 + 2 * en * hh * hh / KMU ** 2)), ap = en < 0 ? sma * (1 + ecc) - KR : Infinity;
+    if (ap >= target) { const ra = KR + ap; out.dv = dv + Math.max(0, Math.sqrt(KMU / ra) - hh / ra); out.ok = true; out.t = t; return out; }
+    const A = kAir(h), avx = vx + KW * y, avy = vy - KW * x, va = Math.hypot(avx, avy), Q = 0.5 * A.rho * va * va;
+    out.maxQ = Math.max(out.maxQ, Q);
+    const pitch = h < turnStart ? Math.PI / 2 : h > turnEnd ? 0 : Math.PI / 2 * (1 - Math.pow((h - turnStart) / (turnEnd - turnStart), shape));
+    const thr = sg.solid ? 1 : Q > qMax ? Math.max(0.3, qMax / Q) : 1, T = (sg.tv - (sg.tv - sg.ta) * Math.min(1, A.p)) * thr;
+    const D = Q * cd * area * dragMach(va / A.a) / 1000, g = KMU / (r * r), dt = 0.5;
+    const tx = Math.cos(pitch) * ex + Math.sin(pitch) * ux, ty = Math.cos(pitch) * ey + Math.sin(pitch) * uy;
+    let ax = T / m * tx - g * ux, ay = T / m * ty - g * uy; if (va > 1) { ax -= D / m * avx / va; ay -= D / m * avy / va; }
+    vx += ax * dt; vy += ay * dt; x += vx * dt; y += vy * dt; t += dt; dv += T / m * dt;
+    const dm = sg.md * thr * dt; m -= dm; left -= dm;
+    if (left <= 0) { si++; if (si >= segs.length) { out.msg = `runs out of fuel at ${(h / 1000).toFixed(0)} km`; out.dv = dv + 1500; return out; } sg = segs[si]; left = sg.prop; m = sg.m0; }
+    if (h < -50) { out.msg = 'falls back'; out.dv = dv + 3000; return out; }
+  }
+  out.msg = 'too slow to reach orbit'; out.dv = dv + 1500; return out;
 }
 
 // ---- part helpers
@@ -585,7 +649,21 @@ function evaluate(g, goal, inv, detail, lim) {
     m -= x.wet - x.prop; // drop the empty stage
   }
   // walk the phases in small Δv chunks
-  const phases = phasesOf(goal);
+  const phases = lim && lim.extraDv ? phasesOf(goal).concat([{ k: 'orbit', name: 'Rendezvous and docking', dv: lim.extraDv, body: goal.split(':')[0] }]) : phasesOf(goal);
+  // station modules stacked on top of the command part
+  const stnStack = Object.entries(g.fix || {}).filter(([id]) => B(id).stn && B(id).d !== 'r');
+  const stnH = stnStack.reduce((a, [id, n]) => a + B(id).h * n, 0), stnW = Math.max(0, ...stnStack.map(([id]) => sz(B(id).d)));
+  // the climb to orbit, flown with drag instead of the flat 3,400 m/s on the Δv map
+  let asc = null;
+  if (phases[0] && phases[0].k === 'launch' && segs.length) {
+    let dMax = Math.max(sz(B(g.cmd).d), stnW); for (const x of st) for (const t of x.s.tanks) if (B(t).d !== 'r') dMax = Math.max(dMax, sz(B(t).d));
+    for (const x of st) if (x.e && x.e.d !== 'r') dMax = Math.max(dMax, sz(x.e.d));
+    let area = Math.PI * (dMax / 2) ** 2; if (g.boost) area += g.boost.k * Math.PI * (sz(B(g.boost.unit).d) || 1.25) ** 2 / 4 * (g.boost.cone ? 0.6 : 1);
+    const pointed = stnStack.length ? false : !B(g.cmd).probe || Object.keys(g.fix || {}).some(id => B(id).cone);
+    for (const sg of segs) { const s0 = g.stages[sg.stage]; sg.solid = !!(s0 && s0.eng && B(s0.eng).srb) || (sg.boost && g.boost && B(g.boost.unit).srb && !!(s0 && s0.eng && B(s0.eng).srb)); }
+    asc = ascent(segs, area, pointed ? 0.3 : 0.5);
+    phases[0] = Object.assign({}, phases[0], { dv: Math.min(9000, Math.max(2800, asc.dv)) });
+  }
   let pi = 0, inPh = 0, cumLaunch = 0, fails = [], worst = 0, extra = 0;
   const perSeg = [];
   for (const sg of segs) {
@@ -608,7 +686,7 @@ function evaluate(g, goal, inv, detail, lim) {
       }
       dvSeg += dv; mm -= dm; left -= dm;
     }
-    perSeg.push({ stage: sg.stage, boost: !!sg.boost, dv: dvSeg, twrAsl: sg.ta / (sg.m0 * KG), twrVac: sg.tv / (sg.m0 * KG), m0: sg.m0, m1: mm, burn: sg.prop / sg.md, ivac, iasl, did });
+    perSeg.push({ stage: sg.stage, boost: !!sg.boost, dv: dvSeg, dvVac: ivac * G0 * Math.log(sg.m0 / (sg.m0 - sg.prop)), dvAsl: iasl * G0 * Math.log(sg.m0 / (sg.m0 - sg.prop)), twrAsl: sg.ta / (sg.m0 * KG), twrVac: sg.tv / (sg.m0 * KG), m0: sg.m0, m1: mm, burn: sg.prop / sg.md, ivac, iasl, did });
   }
   const need = phases.reduce((a, p) => a + p.dv, 0);
   const done = phases.slice(0, pi).reduce((a, p) => a + p.dv, 0) + (pi < phases.length ? inPh : 0);
@@ -628,11 +706,11 @@ function evaluate(g, goal, inv, detail, lim) {
       const steer = (e && e.gimbal > 0) || ctrlFins || (cmdP.torque || 0) >= sg.m0 * 0.5;
       if (!steer) stab.push(`Nothing can steer stage ${g.stages.length - sg.stage} off the pad (${e ? esc0(e.t) + ' has a fixed nozzle' : 'no engine'}${ctrlFins ? '' : ', no control fins'}, ${esc0(cmdP.t)} has ${cmdP.torque || 0} kN·m of torque).`);
     }
-    const flatTop = cmdP.probe && !Object.keys(g.fix || {}).some(id => B(id).cone || B(id).chute);
+    const flatTop = cmdP.probe && !stnStack.length && !Object.keys(g.fix || {}).some(id => B(id).cone || B(id).chute);
     if (flatTop) stab.push(`${esc0(cmdP.t)} has a flat top: add a nose cone (or a parachute on top) so it doesn't tumble.`);
     const m = total;
     if (finLift < 0.02 * m && !(launchSegs[0] && g.stages[launchSegs[0].stage] && B(g.stages[launchSegs[0].stage].eng || 'mk1pod').gimbal >= 2)) stab.push(`Needs more fin area at the bottom: about ${(0.02 * m).toFixed(1)} lift of fins for ${m.toFixed(0)} t (it has ${finLift.toFixed(2)}).`);
-    let hgt = cmdP.h, wid = sz(cmdP.d);
+    let hgt = cmdP.h + stnH, wid = Math.max(sz(cmdP.d), stnW);
     for (const s0 of g.stages) { if (s0.dec) hgt += 0.2; for (const t of s0.tanks) { const q = B(t); if (q.d !== 'r') { hgt += q.h; wid = Math.max(wid, sz(q.d)); } } if (s0.eng && B(s0.eng).d !== 'r') { hgt += B(s0.eng).h; wid = Math.max(wid, sz(B(s0.eng).d)); } }
     if (g.boost) wid += 2 * (sz(B(g.boost.unit).d) || 1.25);
     if (hgt / Math.max(wid, .6) > 16) stab.push(`Very long and thin (${hgt.toFixed(0)} m tall, ${wid.toFixed(2)} m wide): it will bend and flip. Use wider tanks or struts.`);
@@ -650,7 +728,7 @@ function evaluate(g, goal, inv, detail, lim) {
     chk('Liftoff thrust-to-weight you can control');
   }
   { // wider stages on top of narrower ones wobble and bend
-    let wTop = sz(B(g.cmd).d), bad = null;
+    let wTop = Math.max(sz(B(g.cmd).d), stnW), bad = null;
     g.stages.forEach((s0, i) => { const w = stW(s0); if (w && wTop > w + 0.01 && !bad) bad = { i, wTop, w }; if (w) wTop = w; });
     if (bad) stab.push(`Stage ${g.stages.length - bad.i} is ${bad.w} m wide under a ${bad.wTop} m part: wide on narrow wobbles. Keep each stage at least as wide as what sits on it.`);
     chk('Stack gets wider (or stays) going down');
@@ -701,13 +779,13 @@ function evaluate(g, goal, inv, detail, lim) {
     const belowD = (st0.tanks.map(B).filter(t => t.d !== 'r').sort((x, y) => sz(x.d) - sz(y.d))[0] || (st0.eng ? B(st0.eng) : {})).d;
     const dd = B(st0.dec).d; if (dd !== aboveD && dd !== belowD) decSteps++;
   });
-  const sizeSteps = joins.filter(j => !j.adp).length + decSteps + profile * 0.5;
+  const sizeSteps = joins.filter(j => !j.adp).length + decSteps + profile * 0.5 + (stnW > sz(B(g.cmd).d) + 0.01 ? 1 : 0); // station modules wider than the probe they sit on
   const cost = Object.entries(used).reduce((a, [id, n]) => a + B(id).$ * n, 0) + joins.reduce((a, j) => a + (j.adp ? B(j.adp).$ : 0), 0);
   const parts = Object.values(used).reduce((a, n) => a + n, 0) + joins.filter(j => j.adp).length;
   // building limits (career): part count, launch mass, size on the pad
   const lims = [];
   if (lim) {
-    let hgt = B(g.cmd).h, wid = sz(B(g.cmd).d);
+    let hgt = B(g.cmd).h + stnH, wid = Math.max(sz(B(g.cmd).d), stnW);
     for (const s of g.stages) { if (s.dec) hgt += 0.2; for (const t of s.tanks) { const p = B(t); if (p.d !== 'r') { hgt += p.h; wid = Math.max(wid, sz(p.d)); } } if (s.eng) { const e = B(s.eng); if (e.d !== 'r') { hgt += e.h; wid = Math.max(wid, sz(e.d)); } else wid = Math.max(wid, wid + 1.2); } }
     if (g.boost) { const u = B(g.boost.unit); wid = wid + 2 * (sz(u.d) || 1.25) + 0.4; }
     if (lim.parts != null && parts > lim.parts) lims.push({ what: 'parts', have: parts, max: lim.parts });
@@ -727,7 +805,7 @@ function evaluate(g, goal, inv, detail, lim) {
   checks.push({ name: 'Enough thrust-to-weight for every phase', ok: !fails.length }, { name: 'Enough Δv for every phase', ok: margin >= 0 });
   if (lim) checks.push({ name: 'Fits your buildings', ok: !lims.length });
   const r = { score, margin, ok, fails, lims, stab, need, mass: total, cost, parts, science, checks };
-  if (detail) Object.assign(r, { st, segs: perSeg, bo, joins, phases, payload, total, used, sizeSteps });
+  if (detail) Object.assign(r, { asc, st, segs: perSeg, bo, joins, phases, payload, total, used, sizeSteps });
   return r;
 }
 
@@ -831,7 +909,7 @@ function tidy(g) {
 function fixDecs(g, inv, C) {
   const used = partsUsed(g);
   // probes have flat tops: give them a nose cone of their size when there's one spare
-  const cp = BY[g.cmd], hasTop = Object.keys(g.fix || {}).some(id => BY[id].cone || (BY[id].chute && BY[id].d !== 'r'));
+  const cp = BY[g.cmd], hasTop = Object.keys(g.fix || {}).some(id => BY[id].cone || ((BY[id].chute || BY[id].stn) && BY[id].d !== 'r'));
   if (cp.probe && !hasTop) { const c = C.cones.filter(id => (inv[id] || 0) - (used[id] || 0) > 0).sort((a, b) => Math.abs(sz(BY[a].d) - sz(cp.d)) - Math.abs(sz(BY[b].d) - sz(cp.d)))[0]; if (c) { g.fix = Object.assign({}, g.fix, { [c]: 1 }); used[c] = (used[c] || 0) + 1; } }
   if (!cp.probe) for (const id of Object.keys(g.fix || {})) if (BY[id].cone) { const f = Object.assign({}, g.fix); delete f[id]; g.fix = f; }
   g.stages.forEach((s, i) => {
@@ -847,7 +925,8 @@ function optimize(inv, goal, opts = {}) {
   const C = catalog(inv);
   if (!C.cmds.length) return { error: 'Add a command pod, cockpit or probe core.' };
   if (!C.engs.length) return { error: 'Add at least one engine.' };
-  const fix = fixtures(goal, inv, opts.objective === 'science' ? 'science' : C);
+  let fix = fixtures(goal, inv, opts.objective === 'science' ? 'science' : C);
+  if (opts.station) { const f2 = {}; for (const [id, n] of Object.entries(fix)) if (BY[id].rfin) f2[id] = n; fix = Object.assign(f2, opts.station.fix); } // a station launch carries its modules, not chutes or legs
   const restarts = opts.restarts || 6, iters = Math.max(opts.iters || 6000, Math.ceil((opts.minTests || 5000) / restarts));
   let tested = 0;
   if (opts.objective === 'science') C.sci = Object.keys(inv).filter(id => BY[id] && BY[id].sci && inv[id] > 0);
@@ -903,11 +982,115 @@ function autoInventory(allowed) {
   for (const p of Object.values(BY)) {
     if (allowed && !allowed(p)) continue;
     if (p.sci) continue;
-    inv[p.id] = p.cmd ? 1 : p.cat === 'Fuel tanks' ? 10 : p.ta != null || p.jet ? (p.d === 'r' ? 8 : 4) : p.dec ? (p.radial ? 8 : 4) : p.adp ? 2 : p.chute ? 3 : p.leg ? 4 : p.rfin ? 4 : p.wing ? 8 : p.intake ? 6 : p.cone ? 8 : p.shield ? 1 : 2;
+    inv[p.id] = p.cmd ? 1 : p.cat === 'Fuel tanks' ? 10 : p.ta != null || p.jet ? (p.d === 'r' ? 8 : 4) : p.dec ? (p.radial ? 8 : 4) : p.adp ? 2 : p.chute ? 3 : p.leg ? 4 : p.rfin ? 4 : p.wing ? 8 : p.intake ? 6 : p.cone ? 8 : p.shield ? 1 : p.stn ? ({ hab: 0, port: 8, power: 16, battery: 8, rcs: 8, mono: 4 })[p.stn] : 2;
+    if (!inv[p.id]) delete inv[p.id];
   }
   return inv;
 }
-const api = { scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
+// ---- space stations: split the modules over launches, add docking ports, power and RCS, plan the docking order
+const SUN = { Moho: 6.7, Eve: 1.9, Kerbin: 1, Duna: 0.43, Dres: 0.11, Jool: 0.039, Eeloo: 0.023 }; // sunlight compared with Kerbin's (1/distance²)
+const RAD = { Kerbin: 600, Mun: 200, Minmus: 60, Moho: 250, Eve: 700, Gilly: 13, Duna: 320, Ike: 130, Dres: 138, Jool: 6000, Laythe: 500, Vall: 300, Tylo: 600, Bop: 65, Pol: 44, Eeloo: 210 };
+const LOWALT = { Kerbin: 80, Mun: 20, Minmus: 15, Moho: 20, Eve: 100, Gilly: 10, Duna: 60, Ike: 15, Dres: 15, Jool: 210, Laythe: 60, Vall: 20, Tylo: 20, Bop: 30, Pol: 15, Eeloo: 20 };
+function stationOrbit(b) {
+  // the station sits 20 km above the low orbit each launch arrives in, so module launches rendezvous from below
+  const R0 = RAD[b] * 1000, alt = LOWALT[b] + 20, r = R0 + alt * 1000, mu = BODY[b].g * R0 * R0, T = 2 * Math.PI * Math.sqrt(r ** 3 / mu), dark = Math.asin(R0 / r) / Math.PI;
+  const sb = !BODY[b].parent || BODY[b].parent === 'Kerbol' ? b : BODY[b].parent;
+  const r1 = R0 + LOWALT[b] * 1000, at = (r1 + r) / 2, phase = 180 * (1 - Math.pow(at / r, 1.5)), T1 = 2 * Math.PI * Math.sqrt(r1 ** 3 / mu);
+  const hoh = Math.sqrt(mu / r1) * (Math.sqrt(2 * r / (r1 + r)) - 1) + Math.sqrt(mu / r) * (1 - Math.sqrt(2 * r1 / (r1 + r)));
+  return { T, dark, darkT: T * dark, sun: Math.min(3, SUN[sb] || 1), alt, park: LOWALT[b], R0, mu, phase, hoh, xfer: Math.PI * Math.sqrt(at ** 3 / mu), wait: 1 / (1 / T1 - 1 / T) };
+}
+function planStation(inv0, goal, opts = {}) {
+  const body = goal.split(':')[0], orb = stationOrbit(body), orbitGoal = body + ':orbit';
+  const mods = Object.entries(opts.modules || {}).filter(([id, n]) => BY[id] && BY[id].stn && n > 0);
+  if (!mods.length) return { error: 'Pick at least one station module.' };
+  const inv = Object.assign({}, inv0), notes = [];
+  const units = [], extras = {}, picked = {};
+  for (const [id, n] of mods) { if (BY[id].stn === 'hab') for (let i = 0; i < n; i++) units.push(id); else picked[id] = n; }
+  // what the station uses: a little for the probe core and comms, labs run at their rated draw
+  const crew = units.reduce((a, id) => a + (BY[id].crew || 0), 0);
+  const load = 0.2 + units.reduce((a, id) => a + (BY[id].ec || 0), 0);
+  const genOf = (id, n) => n * BY[id].ecGen * (BY[id].rtg ? 1 : orb.sun * (1 - orb.dark) * 0.7); // panels average over the orbit, not always facing the sun
+  const needGen = load * 1.2, needBat = load * orb.darkT * 1.3 + 50;
+  let gen = 0, bat = 0;
+  for (const [id, n] of Object.entries(picked)) { if (BY[id].stn === 'power') gen += genOf(id, n); if (BY[id].stn === 'battery') bat += BY[id].bat * n; if (BY[id].stn === 'power' || BY[id].stn === 'battery') extras[id] = n; }
+  const fill = (kind, have, need, per) => { // lightest set of one part type that covers the rest
+    if (have >= need) return have;
+    let best = null;
+    for (const id of Object.keys(inv).filter(x => BY[x] && BY[x].stn === kind && inv[x] > 0)) { const n = Math.ceil((need - have) / per(id)), nn = Math.min(n, inv[id]), m = BY[id].m * nn + (nn < n ? 1e3 : 0); if (!best || m < best.m) best = { id, n: nn, m }; }
+    if (!best) return have;
+    inv[best.id] -= best.n; extras[best.id] = (extras[best.id] || 0) + best.n; have += per(best.id) * best.n;
+    return have < need && best.n ? fill(kind, have, need, per) : have; // not enough of one kind: add another
+  };
+  gen = fill('power', gen, needGen, id => genOf(id, 1));
+  bat = fill('battery', bat, needBat, id => BY[id].bat);
+  const plan = (k, quick) => {
+    // spread the modules over k launches, heaviest first into the lightest launch
+    const bins = Array.from({ length: k }, () => ({ units: [], m: 0 }));
+    for (const id of units.slice().sort((a, b) => BY[b].m - BY[a].m)) { const b = bins.slice().sort((x, y) => x.m - y.m)[0]; b.units.push(id); b.m += BY[id].m; }
+    bins.sort((a, b) => b.m - a.m); // the heaviest launch is the core
+    const invS = Object.assign({}, inv), take = (id, n) => { invS[id] = (invS[id] || 0) - n; };
+    // one port type for every join: the core has one per module plus a free one for visiting ships
+    const wide = units.some(id => sz(BY[id].d) >= 2.5), needPorts = 2 * k - 1;
+    const portIds = ['portSr', 'port', 'portIn', 'portSh', 'portJr'].filter(id => BY[id] && (!(id === 'portSr') || wide));
+    const havePort = id => (invS[id] || 0) + (picked[id] || 0);
+    const pt = portIds.find(id => havePort(id) >= needPorts) || portIds.find(id => havePort(id) > 0) || null;
+    const ptN = pt ? Math.min(needPorts, havePort(pt)) : 0;
+    if (pt) take(pt, Math.max(0, ptN - (picked[pt] || 0)));
+    const pkgs = bins.map((b, i) => { const fix = {}; for (const id of b.units) fix[id] = (fix[id] || 0) + 1; return { units: b.units, fix, core: i === 0 }; });
+    if (pt) { pkgs[0].fix[pt] = Math.min(ptN, k); for (let i = 1; i < k; i++) if (ptN - k >= i) pkgs[i].fix[pt] = 1; }
+    for (const [id, n] of Object.entries(extras)) pkgs[0].fix[id] = (pkgs[0].fix[id] || 0) + n;
+    for (const [id, n] of Object.entries(picked)) if (!['power', 'battery', 'port'].includes(BY[id].stn)) pkgs[0].fix[id] = (pkgs[0].fix[id] || 0) + n; // RCS you picked rides on the core
+    // modules that dock need RCS: 4 thruster blocks and monopropellant for about 40 m/s
+    let rcsOk = true;
+    for (const pk of pkgs.slice(1)) {
+      const m = Object.entries(pk.fix).reduce((a, [id, n]) => a + BY[id].m * n, 0) * 1.5 + 1, mono = m * (1 - Math.exp(-40 / (240 * G0))) / 0.004;
+      const th = ['rv105', 'pa7'].find(id => (invS[id] || 0) >= (id === 'pa7' ? 8 : 4));
+      const tk = Object.keys(invS).filter(id => BY[id] && BY[id].stn === 'mono' && invS[id] > 0).map(id => ({ id, n: Math.ceil(mono / BY[id].mono) })).filter(x => invS[x.id] >= x.n).sort((a, b) => BY[a.id].m * a.n - BY[b.id].m * b.n)[0];
+      if (!th || !tk) { rcsOk = false; continue; }
+      const nth = th === 'pa7' ? 8 : 4; pk.fix[th] = nth; take(th, nth); pk.fix[tk.id] = tk.n; take(tk.id, tk.n); pk.mono = tk.n * BY[tk.id].mono;
+    }
+    // fly each launch; with your own parts, what one launch uses isn't there for the next
+    let invL = Object.assign({}, invS), tested = 0;
+    const res = [];
+    for (let i = 0; i < pkgs.length; i++) {
+      const base = opts.auto ? Object.assign({}, invS) : invL, invP = Object.assign({}, base);
+      for (const [id, n] of Object.entries(pkgs[i].fix)) invP[id] = (invP[id] || 0) + n;
+      const R2 = optimize(invP, orbitGoal, { iters: quick ? 300 : opts.iters, restarts: quick ? 3 : opts.restarts, minTests: quick ? 900 : 5000, limits: Object.assign({}, opts.limits || {}, { extraDv: i ? 150 : 0 }), objective: opts.objective, station: { fix: pkgs[i].fix }, progress: opts.progress && !quick ? p => opts.progress((i + p) / pkgs.length) : null });
+      if (R2.error) return { error: R2.error };
+      tested += R2.tested || 0;
+      if (!opts.auto) { const u = partsUsed(R2.g); for (const [id, n] of Object.entries(u)) if (!(id in pkgs[i].fix)) invL[id] = (invL[id] || 0) - n; }
+      res.push(Object.assign(R2, { goal: orbitGoal }));
+      if (quick && !R2.r.ok) break;
+    }
+    return { k, pkgs, res, pt, ptN, needPorts, rcsOk, tested, ok: res.length === pkgs.length && res.every(x => x.r.ok) };
+  };
+  let tested = 0, pick = null;
+  const maxK = Math.max(1, units.length);
+  for (let k = 1; k <= maxK; k++) {
+    const q = plan(k, true); if (q.error) return q; tested += q.tested;
+    if (q.ok) { pick = k; break; }
+    const failed = q.res.length - 1, fp = q.pkgs[failed]; // a launch carrying one module can't get lighter
+    if (fp && fp.units.length <= 1) { pick = k; notes.push(`${fp.units[0] ? BY[fp.units[0]].t : 'The core'} is too heavy for any rocket your parts can build${opts.limits ? ' within your buildings\' limits' : ''}.`); break; }
+    if (opts.progress) opts.progress(k / maxK * 0.3);
+  }
+  const P = plan(pick || maxK, false); if (P.error) return P;
+  tested += P.tested;
+  const capacity = crew + P.res.reduce((a, x) => a + (BY[x.g.cmd].crew || 0), 0);
+  const checks = [
+    { name: `Every launch reaches ${goalName(goal).replace(' space station', '')} orbit with Δv to rendezvous`, ok: P.ok },
+    { name: `Panels cover the load (${load.toFixed(1)} EC/s) in sunlight`, ok: gen >= needGen },
+    { name: `Batteries last the ${(orb.darkT / 60).toFixed(0)}-minute night`, ok: bat >= needBat },
+    { name: 'Docking ports: one per join plus a free one for visitors', ok: !!P.pt && P.ptN >= P.needPorts },
+    { name: 'RCS and monopropellant on every module that docks', ok: P.rcsOk },
+  ];
+  if (opts.crew) checks.push({ name: `Room for ${opts.crew} crew`, ok: capacity >= opts.crew });
+  if (!P.pt && P.k > 1) notes.push('No docking ports in your parts.');
+  const ok = checks.every(c => c.ok);
+  const sum = f => P.res.reduce((a, x) => a + (x.r[f] || 0), 0);
+  return { station: true, goal, body, orbit: orb, launches: P.res.map((x, i) => Object.assign(x, { pkg: P.pkgs[i] })), port: P.pt, power: { load, gen, bat, needGen, needBat }, crew: capacity, notes, tested,
+    r: { ok, checks, margin: Math.min(...P.res.map(x => x.r.margin)), cost: sum('cost'), parts: sum('parts'), mass: sum('mass'), stab: notes } };
+}
+const api = { planStation, stationOrbit, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -1412,6 +1595,23 @@ function rocket(g, M, R) {
   const d = R.g, B = id => BY[id];
   let y = 0;
   const cmd = B(d.cmd), rc = rad(cmd.d), fix = Object.entries(d.fix || {});
+  // station payload stacked on top: docking port, then modules, then monoprop tanks; panels and RCS on the sides
+  const order = { port: 0, hab: 1, mono: 2 }, pay = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((a, b) => order[B(a[0]).stn] - order[B(b[0]).stn]);
+  const payTop = y;
+  for (const [id, n] of pay) for (let k = 0; k < n; k++) {
+    const p = B(id), r = rad(p.d), h = Math.max(.2, p.h);
+    if (p.stn === 'port') { mesh(g, new THREE.CylinderGeometry(r * .7, r * .95, h, SEG), M.grey, 0, y - h / 2); mesh(g, new THREE.CylinderGeometry(r * .5, r * .5, .04, SEG), M.dark, 0, y); }
+    else if (p.id === 'cupola') { const dome = mesh(g, new THREE.SphereGeometry(r * .9, SEG, 12, 0, Math.PI * 2, 0, Math.PI / 2), M.glass, 0, y - h * .45); void dome; mesh(g, new THREE.CylinderGeometry(r * .95, r, h * .55, SEG), M.white, 0, y - h * .72); }
+    else if (p.stn === 'hab') { mesh(g, new THREE.CylinderGeometry(r, r, h, SEG), M.white, 0, y - h / 2); mesh(g, new THREE.CylinderGeometry(r * 1.01, r * 1.01, h * .12, SEG), p.lab ? M.orange : M.glass, 0, y - h * .5); }
+    else mesh(g, new THREE.CylinderGeometry(r, r, h, SEG), M.tankWhite, 0, y - h / 2);
+    y -= h;
+  }
+  if (pay.length) {
+    const pr = Math.max(...pay.map(([id]) => rad(B(id).d))), mid = (payTop + y) / 2, panel = new THREE.MeshStandardMaterial({ color: 0x1d3c78, metalness: .4, roughness: .35 });
+    const gens = fix.filter(([id]) => B(id).stn === 'power' && !B(id).rtg), nPan = Math.min(8, gens.reduce((a, [, n]) => a + n, 0));
+    for (let k = 0; k < nPan; k++) { const a = (k % 2 ? Math.PI : 0) + Math.floor(k / 2) * .35, big = gens.some(([id]) => id === 'gigantor'), w = big ? 6 : 2.2; const m = mesh(g, new THREE.BoxGeometry(w, .03, big ? 1.6 : .7), panel, Math.cos(a) * (pr + w / 2 + .1), mid + (Math.floor(k / 2) - 1) * .8, Math.sin(a) * (pr + w / 2 + .1)); m.rotation.y = -a; }
+    if (fix.some(([id]) => B(id).stn === 'rcs')) for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; mesh(g, new THREE.BoxGeometry(.18, .18, .18), M.grey, Math.cos(a) * (pr + .1), y + .3, Math.sin(a) * (pr + .1)); }
+  }
   const stackChute = fix.find(([id]) => B(id).chute && B(id).d !== 'r');
   if (stackChute) chute(g, M, B(stackChute[0]), y, rad(cmd.top || cmd.d));
   y -= pod(g, M, cmd, y);
@@ -1658,18 +1858,33 @@ $('airBox').addEventListener('change', e => {
 });
 function renderGoal() {
   if (isAir()) { $('dest').value = 'Air'; $('mission').hidden = true; renderAir(); $('optRocket').closest('label').hidden = true; $('optPlane').closest('label').hidden = true; save(); return; }
-  $('mission').hidden = false; $('airBox').hidden = true; $('optRocket').closest('label').hidden = false; $('optPlane').closest('label').hidden = false;
+  $('mission').hidden = false; $('airBox').hidden = true; $('stnBox').hidden = !isStation(); $('optRocket').closest('label').hidden = isStation(); $('optPlane').closest('label').hidden = isStation();
   const [b, m0] = st.goal.split(':'), B = O.BODY[b];
   $('dest').value = b;
-  const ms = b === 'Kerbin' ? ['orbit'] : Object.keys(O.MISSIONS).filter(m => !(B.gas && (m === 'land' || m === 'landReturn')));
+  const ms = b === 'Kerbin' ? ['orbit', 'station'] : Object.keys(O.MISSIONS).filter(m => !(B.gas && (m === 'land' || m === 'landReturn')));
   const m = ms.includes(m0) ? m0 : ms.includes('land') ? 'land' : 'orbit';
   st.goal = b + ':' + m;
-  $('mission').innerHTML = ms.map(k => `<option value="${k}">${b === 'Kerbin' ? 'Low orbit' : O.MISSIONS[k][0].toUpperCase() + O.MISSIONS[k].slice(1)}</option>`).join('');
-  $('mission').value = m; $('mission').disabled = b === 'Kerbin';
+  $('mission').innerHTML = ms.map(k => `<option value="${k}">${b === 'Kerbin' && k === 'orbit' ? 'Low orbit' : O.MISSIONS[k][0].toUpperCase() + O.MISSIONS[k].slice(1)}</option>`).join('');
+  $('mission').value = m; $('mission').disabled = false;
+  if (isStation()) { renderStation(); save(); return; }
   const ph = O.phasesOf(st.goal);
   $('goalDv').innerHTML = `<b>${fmt(ph.reduce((a, p) => a + p.dv, 0))} m/s</b> in all: ${ph.map(p => `${esc(p.name)} ${fmt(p.dv)}`).join(' · ')}.${B.atm && b !== 'Kerbin' && ph.some(p => p.k === 'land') ? ` ${b} has air: the landing counts on parachutes${b === 'Eve' ? ' (several)' : ''}, and the climb back out needs sea-level thrust.` : ''} Surface gravity ${fmt(B.g / 9.81, 2)} g.`;
   save();
 }
+// ---- space stations: pick the modules; the app adds ports, power and RCS and splits it over launches
+st.stn = Object.assign({ mods: { hitchhiker: 1 }, crew: 0 }, st.stn || {});
+const isStation = () => /:station$/.test(st.goal);
+const STN_KIND = [['hab', 'Crew cabins and labs'], ['port', 'Docking ports (extra)'], ['power', 'Power (extra)'], ['battery', 'Batteries (extra)'], ['rcs', 'RCS thrusters (extra)'], ['mono', 'Monopropellant (extra)']];
+function renderStation() {
+  const b = st.goal.split(':')[0], o = O.stationOrbit(b), ph = O.phasesOf(b + ':orbit');
+  const row = p => { const n = st.stn.mods[p.id] || 0; return `<div class="pr ${n ? 'has' : ''}"><div style="min-width:0"><div class="t">${esc(p.t)}</div><div class="s">${esc(sizeName(p.d))} · ${fmt(p.m, p.m < 1 ? 3 : 2)} t${p.crew ? ` · ${p.crew} crew` : ''}${p.ecGen ? ` · ${p.ecGen} EC/s` : ''}${p.bat ? ` · ${fmt(p.bat)} EC` : ''}${p.mono ? ` · ${p.mono} mono` : ''}${p.lab ? ' · science lab' : ''}${p.a ? ' · ≈' : ''}</div></div><div class="qty"><button type="button" data-sd="-1" data-id="${p.id}" aria-label="Fewer">−</button><input inputmode="numeric" data-sid="${p.id}" value="${n}" aria-label="How many"><button type="button" data-sd="1" data-id="${p.id}" aria-label="More">+</button></div></div>`; };
+  $('stnBox').innerHTML = `<p class="note" style="margin:0 0 6px">Pick the modules you want up there. The app adds docking ports, solar panels, batteries and RCS from ${st.src === 'auto' ? 'every unlocked part' : 'your parts'}, splits the station into as few launches as your rockets can carry, and plans the docking order. Extras below are optional.</p>
+    ${STN_KIND.map(([k, label]) => { const ps = PARTS.filter(p => p.stn === k && !locked(p.id)); return ps.length ? `<h4 style="margin:10px 0 4px">${label}</h4>${ps.map(row).join('')}` : ''; }).join('') || '<p class="warn">No station parts researched yet.</p>'}
+    <label class="ck"><span style="min-width:120px">Crew it must hold</span><input id="stnCrew" inputmode="numeric" value="${st.stn.crew || 0}" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--line);background:rgba(8,12,16,.7)"></label>`;
+  $('goalDv').innerHTML = `Station at <b>${o.alt} km</b>: a ${fmt(o.T / 60)}-minute orbit with ${fmt(o.darkT / 60)} minutes of night${o.sun !== 1 ? `, sunlight ${fmt(o.sun, 2)}× Kerbin's` : ''}. Each launch needs ${fmt(ph.reduce((a, p) => a + p.dv, 0))} m/s to reach ${o.park} km, plus 150 m/s to rendezvous and dock.`;
+}
+$('stnBox').addEventListener('click', e => { const bt = e.target.closest('[data-sd]'); if (!bt) return; const id = bt.dataset.id; st.stn.mods[id] = Math.max(0, (st.stn.mods[id] || 0) + +bt.dataset.sd); if (!st.stn.mods[id]) delete st.stn.mods[id]; save(); renderStation(); });
+$('stnBox').addEventListener('change', e => { const t = e.target; if (t.id === 'stnCrew') st.stn.crew = Math.max(0, parseInt(t.value, 10) || 0); else if (t.dataset.sid) { const v = Math.max(0, Math.min(20, parseInt(t.value, 10) || 0)); if (v) st.stn.mods[t.dataset.sid] = v; else delete st.stn.mods[t.dataset.sid]; } save(); renderStation(); });
 $('dest').onchange = e => { st.goal = e.target.value === 'Air' ? 'Air' : e.target.value + ':' + (st.goal.split(':')[1] || 'orbit'); renderGoal(); };
 $('mission').onchange = e => { st.goal = st.goal.split(':')[0] + ':' + e.target.value; renderGoal(); };
 renderGoal();
@@ -1680,40 +1895,43 @@ let worker = null;
 function makeWorker() {
   try {
     const code = [...document.querySelectorAll('script:not([src])')].slice(0, 3).map(s => s.textContent).join('\n') +
-      `\nself.onmessage = e => { const { kind, inv, goal, eff, limits, objective, task, must } = e.data; const prog = p => self.postMessage({ prog: p, kind });
-       try { const r = kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective, task, must }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective, must }); self.postMessage({ done: r, kind }); }
+      `\nself.onmessage = e => { const { kind, inv, goal, eff, limits, objective, task, must, stn, auto } = e.data; const prog = p => self.postMessage({ prog: p, kind });
+       try { const r = kind === 'station' ? self.SHIP_OPT.planStation(inv, goal, { modules: stn.mods, crew: stn.crew, auto, iters: 1000 * eff, restarts: 5, progress: prog, limits, objective }) : kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective, task, must }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective, must }); self.postMessage({ done: r, kind }); }
        catch (err) { self.postMessage({ done: { error: err.message }, kind }); } };`;
     return new Worker(URL.createObjectURL(new Blob([code.replace(/typeof window !== 'undefined' \? window : globalThis/g, 'self')], { type: 'text/javascript' })));
   } catch (e) { return null; }
 }
-let last = { rocket: null, plane: null }, view = 'rocket';
+let last = { rocket: null, plane: null, station: null }, view = 'rocket', stLaunch = 0;
 function runKind(kind, eff, onProg) {
   return new Promise(res => {
     if (!worker) worker = makeWorker();
     if (worker) {
       const h = e => { if (e.data.kind !== kind) return; if (e.data.prog != null) onProg(e.data.prog); if (e.data.done) { worker.removeEventListener('message', h); res(e.data.done); } };
-      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must.filter(id => !locked(id)) });
-    } else setTimeout(() => res(kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
+      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must.filter(id => !locked(id)), stn: st.stn, auto: st.src === 'auto' });
+    } else setTimeout(() => res(kind === 'station' ? O.planStation(usable(), st.goal, { modules: st.stn.mods, crew: st.stn.crew, auto: st.src === 'auto', iters: 1000 * eff, restarts: 5, limits: limitsFor('rocket'), objective: st.objective }) : kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
   });
 }
 $('btnRun').onclick = async () => {
   const eff = +$('effort').value, kinds = [];
+  if (isStation()) { if (!Object.values(st.stn.mods).some(n => n > 0)) { toast('Pick at least one station module.'); return; } kinds.push('station'); }
+  else {
   if ($('optRocket').checked && !isAir()) kinds.push('rocket');
   const U2 = usable(); if (isAir() && !(Object.keys(U2).some(id => BY[id].jet) && Object.keys(U2).some(id => BY[id].wing))) { toast('Planes need jets, wings, intakes and landing gear in your parts (or use Any parts).'); return; }
   if (($('optPlane').checked || isAir()) && Object.keys(U2).some(id => BY[id].jet) && Object.keys(U2).some(id => BY[id].wing)) kinds.push('plane');
+  }
   if (!kinds.length) { toast($('optPlane').checked ? 'Spaceplanes need jets and wings in your parts.' : 'Pick rockets or spaceplanes.'); return; }
   $('btnRun').disabled = true; $('prog').hidden = false; const bar = $('prog').firstElementChild, rk = $('progRk'); bar.style.width = '0'; rk.style.left = '0';
   const quips = ['Bolting on tanks…', 'Asking Jeb for advice…', 'Rearranging stages…', 'Checking thrust-to-weight…', 'Adding more boosters…', 'Running the numbers…'];
   let qi = 0; const qt = setInterval(() => { $('runNote').style.opacity = 0; setTimeout(() => { $('runNote').textContent = quips[qi++ % quips.length]; $('runNote').style.opacity = 1; }, 250); }, 2200);
-  last = { rocket: null, plane: null };
+  last = { rocket: null, plane: null, station: null }; stLaunch = 0;
   for (let i = 0; i < kinds.length; i++) {
-    $('runNote').textContent = kinds[i] === 'plane' ? 'Flying spaceplane designs…' : 'Trying rocket arrangements…';
+    $('runNote').textContent = kinds[i] === 'plane' ? 'Flying spaceplane designs…' : kinds[i] === 'station' ? 'Splitting the station over launches…' : 'Trying rocket arrangements…';
     last[kinds[i]] = await runKind(kinds[i], eff, p => { const w = ((i + p) / kinds.length * 100) + '%'; bar.style.width = w; rk.style.left = w; });
   }
   clearInterval(qt); $('btnRun').disabled = false; $('prog').hidden = true; $('runNote').textContent = '';
   const good = k => last[k] && !last[k].error ? last[k].r.margin : -Infinity;
   const cost = k => last[k] && !last[k].error && last[k].r.ok ? (last[k].r.cost || 0) : Infinity;
-  view = st.objective === 'cheap' && (cost('plane') < Infinity || cost('rocket') < Infinity) ? (cost('plane') < cost('rocket') ? 'plane' : 'rocket') : good('plane') > good('rocket') ? 'plane' : 'rocket';
+  view = kinds[0] === 'station' ? 'station' : st.objective === 'cheap' && (cost('plane') < Infinity || cost('rocket') < Infinity) ? (cost('plane') < cost('rocket') ? 'plane' : 'rocket') : good('plane') > good('rocket') ? 'plane' : 'rocket';
   renderResult(); setTab('result');
 };
 // ---- result
@@ -1723,6 +1941,7 @@ function renderResult() {
   let html = both ? `<div class="seg"><button type="button" data-view="rocket" aria-pressed="${view === 'rocket'}">Best rocket${mlabel(last.rocket)}</button><button type="button" data-view="plane" aria-pressed="${view === 'plane'}">Best spaceplane${mlabel(last.plane)}</button></div>` : '';
   if (!R) { el.innerHTML = html + '<p class="note">Nothing yet.</p>'; return; }
   if (R.error) { el.innerHTML = html + `<div class="verdict bad"><b>Can't build one</b>${esc(R.error)}</div>`; bindSeg(); return; }
+  if (R.station) { const L = R.launches[Math.min(stLaunch, R.launches.length - 1)]; el.innerHTML = html + stationHtml(R, L); bindSeg(); el.querySelectorAll('[data-launch]').forEach(b => b.onclick = () => { stLaunch = +b.dataset.launch; renderResult(); }); draw3d(L, 'rocket'); countUp(el); return; }
   html += R.r && R.r.air ? airHtml(R) : view === 'plane' ? planeHtml(R) : rocketHtml(R);
   html += checksHtml(R);
   el.innerHTML = html; bindSeg(); draw3d(R); countUp(el);
@@ -1751,10 +1970,10 @@ function airHtml(R) {
     ${t.kind !== 'speed' ? `<li>${t.ret ? `Turn round over ${esc(t.biome)} and fly home` : `Glide down to ${esc(t.biome)} at the end`}: about ${fmt(f.hours * 60)} minutes of fuel in all.</li>` : `<li>Fastest level flight at ${fmt(t.alt / 1000, 1)} km: Mach ${fmt(f.top.M, 2)}.</li>`}</ul></div>`;
   return h + unusedHtml(R.unused) + '<p class="note">Range comes from a cruise model: lift from wing area, drag from the fuselage and induced drag, jet fuel use from each engine\'s Isp, with intake air limits. Real flights vary with piloting and wind-free conditions are assumed.</p>';
 }
-function checksHtml(R) {
+function checksHtml(R, title = 'Design checks') {
   const c = (R.r && R.r.checks) || []; if (!c.length) return '';
   const pass = c.filter(x => x.ok).length;
-  return `<div class="card"><h3>Design checks: ${pass} of ${c.length} passed</h3><ul class="checks">${c.map(x => `<li class="${x.ok ? 'ok' : 'no'}">${x.ok ? '✓' : '✗'} ${esc(x.name)}</li>`).join('')}</ul><p class="note">Picked after testing ${fmt(R.tested || 0)} designs.</p></div>`;
+  return `<div class="card"><h3>${title}: ${pass} of ${c.length} passed</h3><ul class="checks">${c.map(x => `<li class="${x.ok ? 'ok' : 'no'}">${x.ok ? '✓' : '✗'} ${esc(x.name)}</li>`).join('')}</ul><p class="note">Picked after testing ${fmt(R.tested || 0)} designs.</p></div>`;
 }
 function bindSeg() { document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { view = b.dataset.view; renderResult(); }); }
 function verdict(R, extra) {
@@ -1775,6 +1994,8 @@ function rocketHtml(R) {
   const fix = Object.entries(g.fix || {}), adQ = (r.joins || []).filter(j => j.adp).slice();
   let prevT = B(g.cmd).t;
   const item = (title, text) => { const i = adQ.findIndex(j => j.above === prevT && j.below === title); if (i >= 0) { h += `<li>${esc(BY[adQ[i].adp].t)} (adapter)</li>`; adQ.splice(i, 1); } prevT = title; h += `<li>${text}</li>`; };
+  const pay = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((a, b) => ({ port: 0, hab: 1, mono: 2 })[B(a[0]).stn] - ({ port: 0, hab: 1, mono: 2 })[B(b[0]).stn]);
+  for (const [id, n] of pay) h += `<li>${n > 1 ? n + '× ' : ''}${esc(B(id).t)}${B(id).stn === 'port' ? ' (docking port, facing up)' : ''}</li>`;
   h += `<li>${esc(B(g.cmd).t)}${fix.filter(([id]) => B(id).chute && B(id).d !== 'r').map(([id]) => ` with a ${esc(B(id).t)} on top`).join('')}</li>`;
   const radialFix = fix.filter(([id]) => B(id).leg || B(id).rfin || (B(id).chute && B(id).d === 'r'));
   g.stages.forEach((s, i) => {
@@ -1786,6 +2007,8 @@ function rocketHtml(R) {
     if (i === g.stages.length - 1 && g.boost) { const b = g.boost; h += `<li>Boosters, ${b.k}× symmetry on the bottom tank: ${esc(B(b.dec).t)} → ${b.tanks.map(t => esc(B(t).t)).join(' → ')}${b.tanks.length ? ' → ' : ''}${esc(B(b.unit).t)}${b.cone ? `, ${esc(B(b.cone).t)} on top` : ''}</li>`; }
     void joins;
   });
+  const side = fix.filter(([id]) => B(id).stn && B(id).d === 'r');
+  if (side.length) h += `<li>On the modules: ${side.map(([id, n]) => `${n}× ${esc(B(id).t)}`).join(', ')}${side.some(([id]) => B(id).stn === 'rcs') ? ' (RCS blocks in 4× symmetry around the centre of mass)' : ''}</li>`;
   const sciFix = fix.filter(([id]) => B(id).sci);
   if (sciFix.length) h += `<li>Science: ${sciFix.map(([id, n]) => `${n}× ${esc(B(id).t)}`).join(', ')} (${sciFix.some(([id]) => B(id).d !== 'r') ? 'stack parts right under the pod, the rest' : 'on the pod or the top stage'})</li>`;
   for (const [id, n] of radialFix) h += `<li>${n}× ${esc(B(id).t)} (${B(id).leg ? 'around the stage that does the landing' : B(id).rfin ? 'around the bottom' : 'on the pod'})</li>`;
@@ -1801,8 +2024,51 @@ function rocketHtml(R) {
       <div class="m">Δv ${fmt(sgm.dv)} m/s · TWR ${fmt(sgm.twrAsl, 2)} sea level / ${fmt(sgm.twrVac, 2)} vacuum · burn ${fmt(sgm.burn)} s · Isp ${fmt(sgm.iasl)}/${fmt(sgm.ivac)} s · ${fmt(sgm.m0, 1)} → ${fmt(sgm.m1, 1)} t</div>
       <div>${Object.entries(sgm.did).map(([k, v]) => `<span class="ph">${esc(k)}: ${fmt(v)} m/s</span>`).join('')}</div></div>`;
   }
-  h += '</div><div class="card"><h3>Flying it</h3><ul style="margin:0;padding-left:20px"><li>Turn on SAS before launch.</li><li>At about 100 m/s, tip 5–10° east, then hold the nose on the prograde marker for the rest of the climb; don\'t turn harder than prograde below 10 km.</li><li>Throttle down if you go faster than about 300 m/s below 10 km.</li><li>Cut the engines when the apoapsis reaches 80 km, coast up, and circularise at apoapsis.</li></ul></div>' + unusedHtml(R.unused);
-  h += `<p class="note">Δv per phase uses the stock Δv map; real flights vary with how you fly. Parts marked ≈ in the list use estimated mass or cost.</p>`;
+  h += '</div>' + kerHtml(R) + mjHtml(R) + rdvHtml(R) + unusedHtml(R.unused);
+  h += `<p class="note">The climb from Kerbin is flown in a drag simulation (MechJeb's classic ascent, Project-Atmospheric-Drag-style drag); the rest uses the stock Δv map. Real flights vary with how you fly. Parts marked ≈ in the list use estimated mass or cost.</p>`;
+  return h;
+}
+// Kerbal Engineer Redux-style readout: each stage's Δv in vacuum and at sea level, TWR, burn time and mass
+const mss = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+function kerHtml(R) {
+  const r = R.r, n = R.g.stages.length; if (!r.segs || !r.segs.length) return '';
+  const rows = r.segs.map(sg => `<tr><td>${n - sg.stage}${sg.boost ? '+B' : ''}</td><td>${fmt(sg.dvVac)}</td><td>${fmt(sg.dvAsl)}</td><td>${fmt(sg.twrAsl, 2)}/${fmt(sg.twrVac, 2)}</td><td>${mss(sg.burn)}</td><td>${fmt(sg.m0, 1)}→${fmt(sg.m1, 1)}</td></tr>`).join('');
+  const tv = r.segs.reduce((a, x) => a + x.dvVac, 0), ta = r.segs.reduce((a, x) => a + x.dvAsl, 0), tb = r.segs.reduce((a, x) => a + x.burn, 0);
+  return `<div class="card"><h3>Stage readout (Kerbal Engineer style)</h3><div style="overflow-x:auto"><table class="ker"><tr><th>Stage</th><th>Δv vac</th><th>Δv ASL</th><th>TWR ASL/vac</th><th>Burn</th><th>Mass t</th></tr>${rows}<tr class="tot"><td>Total</td><td>${fmt(tv)}</td><td>${fmt(ta)}</td><td></td><td>${mss(tb)}</td><td>${fmt(r.mass, 1)}</td></tr></table></div><p class="note" style="margin:6px 0 0">Δv in m/s, as Kerbal Engineer shows it in the VAB: each stage on its own, in vacuum and at sea level. +B = with the boosters.</p></div>`;
+}
+// MechJeb ascent guidance settings for this rocket, with what the drag simulation saw
+function mjHtml(R) {
+  const a = R.r.asc;
+  const hand = '<li>By hand: SAS on, tip 5–10° east at about 100 m/s, then follow prograde; throttle back above about 300 m/s below 10 km; cut the engines at the apoapsis you want and circularise there.</li>';
+  if (!a) return `<div class="card"><h3>Flying it</h3><ul style="margin:0;padding-left:20px">${hand}</ul></div>`;
+  return `<div class="card"><h3>Flying it (MechJeb ascent guidance)</h3><ul style="margin:0;padding-left:20px">
+    <li>Orbit altitude <b>${fmt(a.target / 1000)} km</b>, inclination 0°.</li>
+    <li>Ascent path “Classic”: turn start altitude <b>${fmt(a.turnStart)} m</b>, turn end altitude <b>${fmt(a.turnEnd / 1000)} km</b>, final flight path angle 0°, turn shape <b>${fmt(a.shape * 100)}%</b>.</li>
+    <li>Limit dynamic pressure to <b>${fmt(a.qMax / 1000)} kPa</b>${R.g.stages.some(s => s.eng && BY[s.eng].srb) || (R.g.boost && BY[R.g.boost.unit].srb) ? ' (solid boosters ignore it: they can\'t throttle)' : ''}; autostage on; corrective steering on.</li>
+    ${hand}</ul><p class="note" style="margin:6px 0 0">${a.ok ? `Flown in the drag simulation with these settings: <b>${fmt(a.dv)} m/s</b> to orbit (the Δv map says 3,400), engines off after ${mss(a.t)}, peak dynamic pressure ${fmt(a.maxQ / 1000)} kPa, liftoff TWR ${fmt(a.twr0, 2)}.` : `In the drag simulation it ${esc(a.msg || 'doesn\'t reach orbit')}.`}</p></div>`;
+}
+// MechJeb rendezvous and docking steps for a module flying up to the station
+function rdvHtml(R) {
+  if (!R.pkg || R.pkg.core) return '';
+  const b = R.goal.split(':')[0], o = O.stationOrbit(b);
+  return `<div class="card"><h3>Rendezvous and docking (MechJeb)</h3><ol style="margin:0;padding-left:20px">
+    <li>Launch into a ${o.park} km orbit${b !== 'Kerbin' ? ` at ${esc(b)}` : ''} (${fmt(o.alt - o.park)} km below the station). In MechJeb's ascent guidance you can tick “Launch to rendezvous” with the station as target to shorten the wait.</li>
+    <li>Maneuver planner → “Hohmann transfer to target”. It burns when the station is <b>${fmt(o.phase, 1)}°</b> ahead of you: ${fmt(o.hoh, 1)} m/s in two burns, ${fmt(o.xfer / 60)} minutes apart. The longest you'd wait for that angle is about ${o.wait > 7200 ? fmt(o.wait / 3600, 1) + ' hours' : fmt(o.wait / 60) + ' minutes'}.</li>
+    <li>“Fine tune closest approach to target” to 100 m, then “Match velocities with target” at closest approach.</li>
+    <li>Docking autopilot: target the station's free ${esc(BY[Object.keys(R.g.fix).find(id => BY[id].stn === 'port')] ? BY[Object.keys(R.g.fix).find(id => BY[id].stn === 'port')].t : 'docking port')}, control from this module's port, speed limit 1 m/s; RCS does the last 10 m at about 0.2 m/s.</li>
+    <li>Keep the station still while you come in: SmartASS “Normal +” on the core.</li></ol></div>`;
+}
+// the whole station: launches, docking order, power, crew
+function stationHtml(R, L) {
+  const o = R.orbit, pw = R.power, n = R.launches.length, i0 = R.launches.indexOf(L), port = R.port ? BY[R.port].t : null;
+  const role = i => i === 0 ? 'Core' : `Module ${i}`;
+  const mods = x => Object.entries(x.pkg.fix).filter(([id]) => BY[id].stn === 'hab').map(([id, k]) => `${k > 1 ? k + '× ' : ''}${esc(BY[id].t)}`).join(', ') || 'power and ports';
+  let h = `<div class="verdict ${R.r.ok ? 'ok' : 'bad'}"><b>${R.r.ok ? `Station in ${n} launch${n > 1 ? 'es' : ''}` : 'The station plan has problems'}</b>${R.r.ok ? `Every launch reaches ${o.alt} km and docks.` : ''}${R.notes.map(t => ` <span class="warn">${esc(t)}</span>`).join('')}${R.r.checks.filter(c => !c.ok).map(c => ` <span class="warn">✗ ${esc(c.name)}</span>`).join('')}</div>
+  <div class="stats"><div><div class="k">Launches</div><div class="v">${n}</div></div><div><div class="k">Launch mass</div><div class="v">${fmt(R.r.mass)} t</div></div><div><div class="k">Cost</div><div class="v">√${fmt(R.r.cost)}</div></div><div><div class="k">Crew space</div><div class="v">${R.crew}</div></div><div><div class="k">Power</div><div class="v">${fmt(pw.gen, 1)}/${fmt(pw.load, 1)} EC/s</div></div><div><div class="k">Battery</div><div class="v">${fmt(pw.bat)} EC</div></div></div>`;
+  h += `<div class="card"><h3>Docking order</h3><ol style="margin:0;padding-left:20px">${R.launches.map((x, i) => `<li><b>${role(i)}</b>: ${mods(x)}${i === 0 ? ` goes up first, with the solar panels and batteries${port ? ` and ${Math.min(n, x.pkg.fix[R.port] || 0)}× ${esc(port)}` : ''}. It is the passive target: leave it holding Normal +.` : ` docks to port ${i} on the core with its RCS.`}${x.r.ok ? '' : ' <span class="warn">(this launch falls short)</span>'}</li>`).join('')}<li>The last port on the core stays free for crew and supply ships.</li></ol>
+    <p class="note" style="margin:6px 0 0">Night lasts ${fmt(o.darkT / 60)} minutes of each ${fmt(o.T / 60)}-minute orbit; the batteries cover ${fmt(pw.bat / Math.max(.01, pw.load) / 60)} minutes of the station's ${fmt(pw.load, 1)} EC/s (labs at their running draw). Panels are counted at 70% of their rating for not always facing the sun${o.sun !== 1 ? ` and ${fmt(o.sun, 2)}× Kerbin's sunlight` : ''}.</p></div>`;
+  h += `<div class="seg" style="flex-wrap:wrap">${R.launches.map((x, i) => `<button type="button" data-launch="${i}" aria-pressed="${i === i0}">${role(i)}${x.r.ok ? '' : ' ✗'}</button>`).join('')}</div>`;
+  h += rocketHtml(L) + checksHtml(L, `${role(i0)} launch checks`) + checksHtml(R, 'Station checks');
   return h;
 }
 const sz = d => d === 'r' ? 0 : d === 'mk2' ? 1.5 : d === 'mk3' ? 3.75 : d;
@@ -1884,11 +2150,11 @@ $('careerBody').addEventListener('change', e => {
 // ---- 3D picture (viz.js)
 let R3 = null;
 function resize3d() { if (R3 && $('view')) R3.resize(); }
-function draw3d(R) {
+function draw3d(R, kind) {
   const c = $('view'); if (!c) return;
   if (!window.THREE) { c.replaceWith(Object.assign(document.createElement('p'), { className: 'note', textContent: 'The 3D picture needs an internet connection the first time.' })); return; }
   if (R3) R3.dispose();
-  try { R3 = window.SHIP_VIZ.draw(c, R, view); } catch (e) { console.error(e); }
+  try { R3 = window.SHIP_VIZ.draw(c, R, kind || view); } catch (e) { console.error(e); }
 }
 // ---- app bridge (Android app updates)
 const AB = window.AndroidBridge || null;
