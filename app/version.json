@@ -1,8 +1,8 @@
 {
-  "web": 27,
+  "web": 28,
   "apk": 3,
-  "sha256": "ee4cc07cba8d8ddaeb1d4a2bf58d94f2d39061b7f772cb3fa408747b6bcccc14",
-  "notes": "Planes stay a sensible length; no more giant fuselages for extra range",
+  "sha256": "02b910352a78ae9c3a1faeeb836af36d225f8e4a91dae7ef7743ae01ce27ab24",
+  "notes": "More ways to pick the best ship: lightest, fewest parts and most science (with science points per trip)",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

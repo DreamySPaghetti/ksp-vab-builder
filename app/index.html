@@ -145,7 +145,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
     <section id="tab-goal" hidden>
       <div class="card"><h3>Goal</h3><div class="row" style="flex-wrap:nowrap"><select id="dest" aria-label="Destination"></select><select id="mission" aria-label="Mission"></select></div><div id="airBox" hidden style="margin-top:8px;display:grid;gap:8px"></div><p class="note" id="goalDv" style="margin:8px 0 0"></p>
         <div class="seg" role="group" aria-label="Parts to use" style="margin-top:12px"><button type="button" data-src="mine">My parts</button><button type="button" data-src="auto">Any parts (auto)</button></div>
-        <label class="ck"><span style="min-width:120px">Best means</span><select id="objective" style="width:auto"><option value="margin">Most Δv to spare</option><option value="cheap">Cheapest that makes it</option></select></label>
+        <label class="ck"><span style="min-width:120px">Best means</span><select id="objective" style="width:auto"><option value="margin">Most Δv to spare</option><option value="cheap">Cheapest that makes it</option><option value="light">Lightest that makes it</option><option value="parts">Fewest parts</option><option value="science">Most science</option></select></label>
         <p class="note" id="srcNote" style="margin:6px 0 0"></p>
         <label class="ck"><input type="checkbox" id="optRocket" checked> <span>Try rockets (stacked stages, boosters)</span></label>
         <label class="ck"><input type="checkbox" id="optPlane" checked> <span>Try spaceplanes (runway takeoff, jets, then rockets)</span></label>
@@ -415,6 +415,43 @@ const BODY = {
 const KERBIN_ESCAPE = 950;
 const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return' };
 const esc0 = s => String(s);
+// ---- science (stock values as listed on the KSP wiki's science pages): experiment base value, where it works,
+// and how much a transmission is worth compared to bringing the data home
+const EXPS = {
+  goo: { base: 10, sit: 'all', xmit: 0.3, once: true }, scijr: { base: 25, sit: 'all', xmit: 0.35, once: true },
+  thermo: { base: 8, sit: 'landed flyLow space', xmit: 0.5 }, baro: { base: 12, sit: 'landed fly spaceLow', xmit: 0.5 },
+  seismic: { base: 20, sit: 'landed', xmit: 0.45 }, gravioli: { base: 22, sit: 'landed space', xmit: 0.4 },
+  afsv: { base: 20, sit: 'landed fly', xmit: 0.4 }, magneto: { base: 20, sit: 'space', xmit: 0.5 }, weather: { base: 12, sit: 'landed fly space', xmit: 0.5 },
+  crew: { base: 5, sit: 'all', xmit: 1 }, eva: { base: 8, sit: 'all', xmit: 1 }, sample: { base: 30, sit: 'landed', xmit: 0.25 },
+};
+// body multipliers by situation: [landed, flying low, flying high, space low, space high]
+const SCI = { Kerbin: [0.3, 0.7, 0.9, 1, 1.5], Mun: [4, 0, 0, 3, 2], Minmus: [5, 0, 0, 4, 2.5], Moho: [10, 0, 0, 8, 7], Eve: [8, 6, 6, 7, 5], Gilly: [9, 0, 0, 8, 6],
+  Duna: [8, 5, 5, 7, 5], Ike: [8, 0, 0, 7, 5], Dres: [8, 0, 0, 7, 6], Jool: [0, 12, 12, 7, 6], Laythe: [14, 11, 11, 9, 8], Vall: [12, 0, 0, 9, 8], Tylo: [12, 0, 0, 10, 8],
+  Bop: [12, 0, 0, 9, 8], Pol: [12, 0, 0, 9, 8], Eeloo: [15, 0, 0, 12, 10] };
+const SIT_IDX = { landed: 0, flyLow: 1, flyHigh: 2, spaceLow: 3, spaceHigh: 4 };
+const sitFits = (e, sit) => e.sit === 'all' || e.sit.split(' ').some(k => k === sit || (k === 'fly' && sit.startsWith('fly')) || (k === 'space' && sit.startsWith('space')));
+// situations a mission passes through, and whether the data comes home
+function missionSits(goal) {
+  const [b, m] = goal.split(':'), out = [['Kerbin', 'flyLow'], ['Kerbin', 'flyHigh'], ['Kerbin', 'spaceLow']];
+  if (b === 'Air') return { sits: [['Kerbin', 'flyLow'], ['Kerbin', 'flyHigh']], home: true };
+  if (b !== 'Kerbin') { out.push(['Kerbin', 'spaceHigh'], [b, 'spaceHigh']); if (m !== 'flyby') out.push([b, 'spaceLow']); if (m === 'land' || m === 'landReturn') { const S = SCI[b]; if (S && S[1]) out.push([b, 'flyLow'], [b, 'flyHigh']); out.push([b, 'landed']); } }
+  return { sits: out.filter(([x, si]) => SCI[x] && SCI[x][SIT_IDX[si]] > 0), home: m === 'landReturn' || m === 'orbitReturn' || b === 'Kerbin' };
+}
+// science points for the experiments carried (plus crew reports, EVA reports and surface samples when there's a crew)
+function scienceOf(goal, fix, cmd) {
+  const { sits, home } = missionSits(goal), canSend = home || Object.keys(fix || {}).some(id => id === 'comm16');
+  const crew = BY[cmd] && BY[cmd].crew ? 1 : 0, items = [];
+  for (const [id, n] of Object.entries(fix || {})) if (EXPS[id]) items.push([id, n]);
+  if (crew) items.push(['crew', 1], ['eva', 1], ['sample', 1]);
+  let total = 0;
+  for (const [id, n] of items) {
+    const e = EXPS[id], vals = sits.filter(([, si]) => sitFits(e, si)).map(([b, si]) => e.base * SCI[b][SIT_IDX[si]]).sort((a, c) => c - a);
+    const f = home ? 1 : canSend ? e.xmit : 0;
+    const take = e.once ? vals.slice(0, n) : vals; // single-use experiments: one situation per unit
+    total += take.reduce((a, v) => a + v, 0) * f;
+  }
+  return total;
+}
 const cumBefore = (segs, sg) => { let c = 0; for (const x of segs) { if (x === sg) break; c += x.dv; } return c; };
 const isPlanet = b => BODY[b].parent === 'Kerbol';
 const the = b => ['Mun'].includes(b) ? 'the Mun' : b;
@@ -630,8 +667,13 @@ function evaluate(g, goal, inv, detail, lim) {
   const ok = fails.length === 0 && margin >= 0 && !lims.length && !stab.length;
   let score = -limPen - stabPen + margin - (fails.length ? 1500 + 4000 * worst : 0) - sizeSteps * 90 - parts * 0.5 - cost * 1e-4;
   // "cheapest that makes it": once the goal is reached with a reserve, cheaper and smaller wins
-  if (lim && lim.objective === 'cheap') { const reserve = Math.max(150, need * 0.05); score = ok && margin >= reserve ? 1e5 - cost * 0.3 - parts * 5 - sizeSteps * 200 : score - reserve; }
-  const r = { score, margin, ok, fails, lims, stab, need, mass: total, cost, parts };
+  const science = scienceOf(goal, g.fix, g.cmd);
+  const obj = lim && lim.objective;
+  if (obj && obj !== 'margin') {
+    const reserve = Math.max(150, need * 0.05), made = ok && margin >= reserve;
+    score = made ? 1e5 - sizeSteps * 200 + objScore(obj, { cost, parts, mass: total, science }) : score - reserve;
+  }
+  const r = { score, margin, ok, fails, lims, stab, need, mass: total, cost, parts, science };
   if (detail) Object.assign(r, { st, segs: perSeg, bo, joins, phases, payload, total, used, sizeSteps });
   return r;
 }
@@ -650,9 +692,18 @@ function catalog(inv) {
     decs: ids.filter(id => BY[id].dec && !BY[id].radial),
     rdecs: ids.filter(id => BY[id].dec && BY[id].radial),
     cones: ids.filter(id => BY[id].cone),
+    sci: [],
   };
 }
 // extras chosen by rule, not search: parachute for goals that come home, legs for landings, fins on the first stage
+// what "best" means once the goal is reached
+function objScore(obj, x) {
+  if (obj === 'cheap') return -x.cost * 0.3 - x.parts * 5;
+  if (obj === 'light') return -x.mass * 200 - x.parts * 2;
+  if (obj === 'parts') return -x.parts * 60 - x.cost * 0.01;
+  if (obj === 'science') return x.science * 30 - x.cost * 0.02 - x.mass * 5;
+  return 0;
+}
 function fixtures(goal, inv, cat) {
   const fix = {};
   const G = goalInfo(goal), pick = f => Object.keys(inv).filter(id => BY[id] && inv[id] > 0 && f(BY[id])).sort((a, b) => BY[a].m - BY[b].m);
@@ -662,7 +713,8 @@ function fixtures(goal, inv, cat) {
   if (G.lands) { const l = pick(p => p.leg && !p.gear)[0]; if (l) fix[l] = Math.min(4, inv[l]) >= 3 ? Math.min(4, inv[l]) : 0; if (!fix[l]) delete fix[l]; }
   const fl = pick(p => p.rfin && inv[p.id] >= 3).sort((a, b) => BY[b].lift - BY[a].lift); if (fl[0]) fix[fl[0]] = Math.min(4, inv[fl[0]]); // the biggest fins you have
   // science experiments are the payload: everything you add goes along
-  for (const id of Object.keys(inv)) if (BY[id] && BY[id].sci && inv[id] > 0) fix[id] = inv[id];
+  for (const id of Object.keys(inv)) if (BY[id] && BY[id].sci && inv[id] > 0) fix[id] = cat === 'science' ? 0 : inv[id];
+  for (const k of Object.keys(fix)) if (!fix[k]) delete fix[k];
   void cat;
   return fix;
 }
@@ -706,6 +758,11 @@ function mutate(g, inv, C, r) {
     else if (b.tanks.length) b.tanks.pop();
   }
   else if (mv < 0.95 && n.boost) { const c = C.cones.find(id => avail(id) >= n.boost.k && BY[id].d === BY[n.boost.unit].d); n.boost.cone = n.boost.cone ? null : c || null; }
+  else if (C.sci.length && r() < 0.6) { // science parts: carry one more or one fewer
+    const id = C.sci[Math.floor(r() * C.sci.length)], have = (n.fix || {})[id] || 0, f = Object.assign({}, n.fix);
+    if (r() < 0.6 && avail(id) > 0) f[id] = have + 1; else if (have > 0) { f[id] = have - 1; if (!f[id]) delete f[id]; }
+    n.fix = f;
+  }
   else if (C.cmds.length > 1) n.cmd = C.cmds[Math.floor(r() * C.cmds.length)];
   return n;
 }
@@ -737,8 +794,9 @@ function optimize(inv, goal, opts = {}) {
   const C = catalog(inv);
   if (!C.cmds.length) return { error: 'Add a command pod, cockpit or probe core.' };
   if (!C.engs.length) return { error: 'Add at least one engine.' };
-  const fix = fixtures(goal, inv, C);
+  const fix = fixtures(goal, inv, opts.objective === 'science' ? 'science' : C);
   const iters = opts.iters || 6000, restarts = opts.restarts || 6;
+  if (opts.objective === 'science') C.sci = Object.keys(inv).filter(id => BY[id] && BY[id].sci && inv[id] > 0);
   opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin' });
   let best = null;
   const lightCmd = C.cmds.slice().sort((a, b) => BY[a].m - BY[b].m);
@@ -779,7 +837,7 @@ function autoInventory(allowed) {
   }
   return inv;
 }
-const api = { autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
+const api = { scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -1001,7 +1059,8 @@ function airScore(d, task, lim) {
   // past half again the distance needed, more range isn't worth more fuselage
   let sc = -limPen - sp.pen + Math.min(margin, need * 0.5) - k.parts * 2 - k.cost * 0.01 - (f.ok ? 0 : 500);
   const ok2 = ok && !sp.note;
-  if (lim && lim.objective === 'cheap' && ok2) sc = 1e5 - k.cost * 0.3 - k.parts * 5;
+  const sci = O.scienceOf('Air', d.fix, d.cmd);
+  if (lim && lim.objective && lim.objective !== 'margin' && ok2) sc = 1e5 + O.objScore(lim.objective, { cost: k.cost, parts: k.parts, mass: k.m, science: sci });
   return { score: sc, ok: ok2, margin, lims, fails: [], stab: sp.note ? [sp.note] : [], f, air: true, cost: k.cost, parts: k.parts };
 }
 function score(d, goal, lim) {
@@ -1022,7 +1081,8 @@ function score(d, goal, lim) {
   const fails = [];
   for (const p of ph) { const g = O.BODY[p.body].g, twr = n * R.tv / (f.mOrbit * g), want = p.k === 'land' ? (p.chute ? 0 : 2) : p.k === 'ascent' ? 1.6 : 0.15; if (twr < want) fails.push({ ph: p.name, twr, need: want }); }
   const margin = f.dvLeft - need, sp = shapePen(d);
-  if (lim && lim.objective === 'cheap') { const reserve = Math.max(150, need * 0.05 + 50), okk = margin >= reserve && !fails.length && !lims.length; if (okk) return { score: 1e5 - k.cost * 0.3 - k.parts * 5, ok: true, margin, fails, lims, f, cost: k.cost, parts: k.parts }; }
+  const science = O.scienceOf(goal, d.fix, d.cmd);
+  if (lim && lim.objective && lim.objective !== 'margin') { const reserve = Math.max(150, need * 0.05 + 50), okk = margin >= reserve && !fails.length && !lims.length && !sp.note; if (okk) return { score: 1e5 + O.objScore(lim.objective, { cost: k.cost, parts: k.parts, mass: k.m, science }), ok: true, margin, fails, lims, f, science, cost: k.cost, parts: k.parts }; }
   return { score: -limPen - sp.pen + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length && !sp.note, margin, fails, lims, stab: sp.note ? [sp.note] : [], f, cost: k.cost, parts: k.parts };
 }
 
@@ -1409,6 +1469,7 @@ const usable = () => {
   if (st.src !== 'auto') return mine;
   const inv = O.autoInventory(p => !locked(p.id));
   for (const [id, n] of Object.entries(mine)) if (BY[id].sci) inv[id] = n; // your science parts still ride along
+  if (st.objective === 'science') for (const p of PARTS) if (p.sci && !locked(p.id) && !inv[p.id]) inv[p.id] = p.id === 'goo' || p.id === 'scijr' ? 4 : 1; // offer every experiment
   return inv;
 };
 function renderSrc() {
@@ -1416,7 +1477,8 @@ function renderSrc() {
   if (!st.objective) st.objective = st.src === 'auto' ? 'cheap' : 'margin';
   $('objective').value = st.objective;
   const sciN = Object.entries(st.inv).filter(([id, n]) => n > 0 && BY[id].sci && !locked(id)).reduce((a, [, n]) => a + n, 0);
-  $('srcNote').textContent = (st.src === 'auto' ? `Builds from every ${st.career.on ? 'unlocked ' : ''}part, as many as it needs.${st.objective === 'margin' && !st.career.on ? ' With no building limits, “most Δv” makes enormous rockets; “cheapest that makes it” is usually what you want.' : ''}` : 'Builds only from the parts and counts you set.') + (sciN ? ` Carries your ${sciN} science part${sciN > 1 ? 's' : ''}.` : '');
+  const objNote = { cheap: 'Once it reaches the goal (with a little reserve), lower cost wins.', light: 'Once it reaches the goal, the lightest launch mass wins.', parts: 'Once it reaches the goal, the fewest parts win (good for slow phones and early VAB levels).', science: 'Picks which science parts to take (from your list, or every unlocked one in auto) for the most science points: each experiment in each situation the trip passes through, at that body\'s multiplier, full value if the data comes home, part value if transmitted (needs an antenna). Crewed pods add crew and EVA reports and surface samples.', margin: '' }[st.objective] || '';
+  $('srcNote').textContent = objNote + ' ' + (st.src === 'auto' ? `Builds from every ${st.career.on ? 'unlocked ' : ''}part, as many as it needs.${st.objective === 'margin' && !st.career.on ? ' With no building limits, “most Δv” makes enormous rockets; “cheapest that makes it” is usually what you want.' : ''}` : 'Builds only from the parts and counts you set.') + (sciN ? ` Carries your ${sciN} science part${sciN > 1 ? 's' : ''}.` : '');
 }
 document.querySelectorAll('[data-src]').forEach(b => b.onclick = () => { st.src = b.dataset.src; st.objective = st.src === 'auto' ? 'cheap' : 'margin'; renderSrc(); save(); });
 $('objective').onchange = e => { st.objective = e.target.value; renderSrc(); save(); };
@@ -1578,7 +1640,7 @@ function limText(l, plane) {
 function unusedHtml(u) { if (st.src === 'auto') return ''; const e = Object.entries(u); return e.length ? `<div class="card"><h3>Not used</h3><p class="note" style="margin:0">${e.map(([id, n]) => `${n}× ${esc(BY[id].t)}`).join(' · ')}</p></div>` : ''; }
 function rocketHtml(R) {
   const { g, r } = R, B = id => BY[id];
-  let h = verdict(R) + `<div class="stats"><div><div class="k">Mass</div><div class="v">${fmt(r.mass, 1)} t</div></div><div><div class="k">Parts</div><div class="v">${r.parts}</div></div><div><div class="k">Cost</div><div class="v">√${fmt(r.cost)}</div></div></div><canvas id="view"></canvas>`;
+  let h = verdict(R) + `<div class="stats"><div><div class="k">Mass</div><div class="v">${fmt(r.mass, 1)} t</div></div><div><div class="k">Parts</div><div class="v">${r.parts}</div></div><div><div class="k">Cost</div><div class="v">√${fmt(r.cost)}</div></div>${r.science ? `<div><div class="k">Science</div><div class="v">${fmt(r.science)}</div></div><div><div class="k">Science / √1000</div><div class="v">${fmt(r.science / Math.max(1, r.cost / 1000), 1)}</div></div><div><div class="k">Situations</div><div class="v">${O.missionSits(R.goal).sits.length}</div></div>` : ''}</div><canvas id="view"></canvas>`;
   // build order, top to bottom
   h += `<div class="card"><h3>Build it, top to bottom</h3><ol style="margin:0;padding-left:20px">`;
   const fix = Object.entries(g.fix || {}), adQ = (r.joins || []).filter(j => j.adp).slice();
