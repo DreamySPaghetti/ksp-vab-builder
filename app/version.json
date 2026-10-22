@@ -1,8 +1,8 @@
 {
-  "web": 39,
+  "web": 40,
   "apk": 3,
-  "sha256": "800ea732ae37a4cb2e35c3d177321cdd42f3edc878a84b1d710a182efb0d60d7",
-  "notes": "Solid booster stages no longer carry liquid tanks.",
+  "sha256": "df6a3d2d85fb487987baf1ba4fabdb4e3682bb45b97d42c08e6f248bcb137451",
+  "notes": "Redesign after R&D: opens on the goal and uses every unlocked part by default; crewed by default for landings; player-style rules (adapters, rocket tanks only, lifter drops in orbit); 'Best balance' replaces 'Most \u0394v'; three options to pick from; VAB build steps and the staging stack as KSP shows it.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
