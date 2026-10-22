@@ -1,8 +1,8 @@
 {
-  "web": 44,
+  "web": 45,
   "apk": 3,
-  "sha256": "21b008b676b5ba55dc2c1775f1370fa00156b48874ad0ea793fb92acd8e7834a",
-  "notes": "Built-in calculators (Tools tab): transfer windows, \u0394v map, orbit changes, circularise, rendezvous, satellite networks with batteries, landing burn, aerobraking/re-entry, stage \u0394v & TWR; missions open them pre-filled",
+  "sha256": "5278e1a968db62e636df9d1f5432b369ee89c6ebe68f2f81cf3027383afe990b",
+  "notes": "Spaceplanes (to orbit, STS shuttles, aircraft jobs), space stations and surface bases are back: design, build steps and tap-through flight plans for each; Spaceplane Hangar and Runway levels in Career; stricter plane, shuttle and station-lifter rules",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
