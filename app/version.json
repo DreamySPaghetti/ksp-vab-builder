@@ -1,8 +1,8 @@
 {
-  "web": 37,
+  "web": 38,
   "apk": 3,
-  "sha256": "c8dc416d6fdb0cf9994d9732adf0b5d98409dfec5e7be1046d0e83ca226def38",
-  "notes": "Shuttle: says exactly which parts are missing (and the research node in career) instead of a vague message.",
+  "sha256": "9ab275d1901a87e5449f42d10d06c2e3c4a8be870d5b0575a79d025adc087898",
+  "notes": "Pinned wing parts ride on a rocket as symmetric fins at the bottom (and count as fins); at most 6 tanks stacked per stage.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

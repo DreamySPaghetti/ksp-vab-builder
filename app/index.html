@@ -813,8 +813,9 @@ function evaluate(g, goal, inv, detail, lim) {
   const stab = [], checks = [];
   let mark = 0; const chk = name => { checks.push({ name, ok: stab.length === mark }); mark = stab.length; };
   {
-    const cmdP = B(g.cmd), finId = Object.keys(g.fix || {}).find(id => B(id).rfin), finLift = finId ? B(finId).lift * g.fix[finId] : 0;
-    const ctrlFins = finId && ['avr8', 'deltadeluxe'].includes(finId);
+    const cmdP = B(g.cmd), finId = Object.keys(g.fix || {}).find(id => B(id).rfin), wingFix = Object.entries(g.fix || {}).filter(([id]) => B(id).wing); // wing parts on a rocket go on the bottom as fins
+    const finLift = (finId ? B(finId).lift * g.fix[finId] : 0) + wingFix.reduce((a, [id, n]) => a + B(id).lift * n, 0);
+    const ctrlFins = (finId && ['avr8', 'deltadeluxe'].includes(finId)) || wingFix.some(([id]) => B(id).ctrl);
     const launchSegs = perSeg.filter(sg => (sg.did['Launch to low Kerbin orbit'] || 0) > 0).slice(0, 2);
     for (const sg of launchSegs) {
       const s0 = g.stages[sg.stage], e = s0 && s0.eng && B(s0.eng);
@@ -846,6 +847,10 @@ function evaluate(g, goal, inv, detail, lim) {
     const mixed = g.stages.findIndex(s0 => new Set(s0.tanks.map(t => B(t).d).filter(d => d !== 'r')).size > 2);
     if (mixed >= 0) stab.push(`Stage ${g.stages.length - mixed} stacks tanks of ${new Set(g.stages[mixed].tanks.map(t => B(t).d).filter(d => d !== 'r')).size} different sizes: use one or two sizes per stage.`);
   }
+  { const many = g.stages.findIndex(s0 => s0.tanks.filter(t => B(t).d !== 'r').length > 6);
+    if (many >= 0) stab.push(`Stage ${g.stages.length - many} stacks ${g.stages[many].tanks.filter(t => B(t).d !== 'r').length} tanks: every joint flexes, so a stack that long wobbles apart. Use fewer, longer tanks (at most 6 per stage).`);
+    const oddW = Object.entries(g.fix || {}).find(([id, n]) => B(id).wing && !B(id).fin && n % 2);
+    if (oddW) stab.push(`${oddW[1]}× ${esc0(B(oddW[0]).t)} on a rocket: fins and wings go on in symmetric pairs.`); }
   chk('Every part strong enough for what is stacked on it');
   // ---- more rules a real flight has to follow
   const launches = phases[0] && phases[0].k === 'launch';
@@ -1126,7 +1131,7 @@ function optimize(inv, goal, opts = {}) {
   const must = (opts.must || []).filter(id => BY[id] && (inv[id] || 0) > 0);
   const mustCmd = must.find(id => BY[id].cmd);
   if (mustCmd) C.cmds = [mustCmd];
-  for (const id of must) { const p = BY[id]; if (!p.cmd && !(p.ta != null) && !(p.cat === 'Fuel tanks') && !p.dec && !p.sci) fix[id] = Math.max(fix[id] || 0, 1); }
+  for (const id of must) { const p = BY[id]; if (!p.cmd && !(p.ta != null) && !(p.cat === 'Fuel tanks') && !p.dec && !p.sci) fix[id] = Math.max(fix[id] || 0, p.wing && !p.fin ? Math.min(4, Math.max(2, (inv[id] || 0) >= 4 ? 4 : 2)) : 1); }
   const evalM = (g2, detail) => {
     const e = evaluate(g2, goal, inv, detail, opts.limits);
     const u = partsUsed(g2), miss = must.filter(id => !(u[id] > 0));
@@ -2035,6 +2040,7 @@ function rocket(g, M, R) {
   for (const [id, n] of fix) {
     const p = B(id);
     if (p.rfin) fins(g, M, n, bottomY + .2, lastR, Math.max(.9, lastR * 1.2));
+    if (p.wing) fins(g, M, n, bottomY + .2 + (fix.some(([x]) => B(x).rfin) ? Math.max(.9, lastR * 1.2) : 0), lastR, Math.max(.6, Math.sqrt(p.lift) * 1.3)); // pinned wing parts: on the bottom as fins
     if (p.leg) legs(g, M, n, landY + 1.2, rc);
     if (p.chute && p.d === 'r') for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2; mesh(g, new THREE.CylinderGeometry(.15, .15, .5, 16), M.orange, Math.cos(a) * rc * .75, -cmd.h * .5, Math.sin(a) * rc * .75); }
   }
@@ -2384,6 +2390,7 @@ $('btnRun').onclick = async () => {
     if ($('optShuttle').checked && shuttleOK()) { const miss = shuttleMissing(U2); if (!miss.length) kinds.push('shuttle'); else if (kinds.length) toast(`Skipping the shuttle: ${miss.join(', ')}.`, 4000); else { toast(`A shuttle still needs ${miss.join(', ')}. ${st.src === 'auto' ? (st.career.on ? 'Research them in Career, or tick rockets.' : 'Tick rockets as well.') : 'Add them in Parts, or switch to Any parts (auto).'}`, 6000); return; } }
   }
   if (!kinds.length) { toast(isStation() ? 'Pick at least one module.' : 'Tick rockets, spaceplanes or shuttles.'); return; }
+  if (kinds.length === 1 && kinds[0] === 'rocket' && st.must.some(id => BY[id] && (BY[id].wing || BY[id].jet || BY[id].intake || (BY[id].cmd && BY[id].plane)))) toast('Pinned wings ride on the rocket as fins. Tick spaceplanes or shuttles for a winged ship.', 5000);
   $('btnRun').disabled = true; $('prog').hidden = false; const bar = $('prog').firstElementChild, rk = $('progRk'); bar.style.width = '0'; rk.style.left = '0';
   last = { rocket: null, plane: null, shuttle: null, station: null }; stLaunch = 0;
   const t0 = Date.now(), WT = { rocket: 2, plane: 1, shuttle: 1 }, wsum = kinds.reduce((a, k) => a + (WT[k] || 1), 0);
@@ -2467,7 +2474,7 @@ function rocketHtml(R) {
   for (const [id, n] of pay) h += `<li>${n > 1 ? n + '× ' : ''}${esc(B(id).t)}${B(id).stn === 'port' ? ' (docking port, facing up)' : ''}</li>`;
   const LANDER = g.lander;
   h += `<li>${esc(B(g.cmd).t)}${fix.filter(([id]) => B(id).chute && B(id).d !== 'r').map(([id]) => ` with a ${esc(B(id).t)} on top`).join('')}</li>`;
-  const radialFix = fix.filter(([id]) => B(id).leg || B(id).rfin || (B(id).chute && B(id).d === 'r'));
+  const radialFix = fix.filter(([id]) => B(id).leg || B(id).rfin || B(id).wing || (B(id).chute && B(id).d === 'r'));
   if (LANDER) h += `<li><b>The lander</b> (built below), inside a fairing or adapter between the pod and the top stage, docking port up</li>`;
   g.stages.forEach((s, i) => {
     const joins = r.joins || [];
@@ -2482,7 +2489,7 @@ function rocketHtml(R) {
   if (side.length) h += `<li>On the modules: ${side.map(([id, n]) => `${n}× ${esc(B(id).t)}`).join(', ')}${side.some(([id]) => B(id).stn === 'rcs') ? ' (RCS blocks in 4× symmetry around the centre of mass)' : ''}</li>`;
   const sciFix = fix.filter(([id]) => B(id).sci);
   if (sciFix.length) h += `<li>Science: ${sciFix.map(([id, n]) => `${n}× ${esc(B(id).t)}`).join(', ')} (${sciFix.some(([id]) => B(id).d !== 'r') ? 'stack parts right under the pod, the rest' : 'on the pod or the top stage'})</li>`;
-  for (const [id, n] of radialFix) h += `<li>${n}× ${esc(B(id).t)} (${B(id).leg ? 'around the stage that does the landing' : B(id).rfin ? 'around the bottom' : 'on the pod'})</li>`;
+  for (const [id, n] of radialFix) h += `<li>${n}× ${esc(B(id).t)} (${B(id).leg ? 'around the stage that does the landing' : B(id).rfin ? 'around the bottom' : B(id).wing ? 'as fins around the bottom stage, in symmetry' : 'on the pod'})</li>`;
   h += '</ol>';
   const adps = (r.joins || []).filter(j => j.adp), steps = (r.joins || []).filter(j => !j.adp);
   void adps;
