@@ -78,7 +78,7 @@ label.ck { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px }
       <div id="careerBody"></div>
     </section>
     <section id="tab-goal" hidden>
-      <div class="card"><h3>Goal</h3><select id="goal"></select>
+      <div class="card"><h3>Goal</h3><div class="row" style="flex-wrap:nowrap"><select id="dest" aria-label="Destination"></select><select id="mission" aria-label="Mission"></select></div><p class="note" id="goalDv" style="margin:8px 0 0"></p>
         <label class="ck"><input type="checkbox" id="optRocket" checked> <span>Try rockets (stacked stages, boosters)</span></label>
         <label class="ck"><input type="checkbox" id="optPlane" checked> <span>Try spaceplanes (runway takeoff, jets, then rockets)</span></label>
         <label class="ck"><span style="min-width:120px">Search effort</span><select id="effort" style="width:auto"><option value="1">Quick</option><option value="2" selected>Normal</option><option value="4">Thorough</option></select></label>
@@ -300,31 +300,64 @@ if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PARTS = 
 const { BY } = root.SHIP_PARTS || require('./parts.js');
 const G0 = 9.80665, KG = 9.81, U = 0.005; // t per unit of liquid fuel / oxidizer
 
-// Stock Δv map (from the launch pad; KSP community Δv map)
-const BODY = { Kerbin: { g: 9.81 }, Mun: { g: 1.63 }, Minmus: { g: 0.491 } };
-const PH = {
-  launch: (b) => ({ k: 'launch', name: 'Launch to low Kerbin orbit', dv: 3400, body: 'Kerbin' }),
-  transfer: (b) => ({ k: 'transfer', name: `Transfer to the ${b}`, dv: b === 'Mun' ? 860 : 930, body: 'Kerbin' }),
-  capture: (b) => ({ k: 'orbit', name: `${b} orbit insertion`, dv: b === 'Mun' ? 310 : 160, body: b }),
-  land: (b) => ({ k: 'land', name: `Landing on the ${b}`, dv: b === 'Mun' ? 580 : 180, body: b }),
-  ascent: (b) => ({ k: 'ascent', name: `Ascent from the ${b}`, dv: b === 'Mun' ? 580 : 180, body: b }),
-  home: (b) => ({ k: 'orbit', name: 'Return to Kerbin (aerobrake)', dv: b === 'Mun' ? 310 : 160, body: b }),
+// Every stock body. Δv from the community Δv map (Kowgan's subway map, from low Kerbin orbit):
+// int: to get an encounter from the parent hub (Kerbin moons: from LKO; planets: after Kerbin escape; moons of planets:
+// from the planet's elliptical capture), cap: elliptical capture, low: on to low orbit, land: low orbit to the surface
+// (vacuum: the same Δv back up; atmosphere: ascent given, descent mostly by parachute/aerobraking).
+// g: surface gravity m/s², atm: surface pressure in atmospheres.
+const BODY = {
+  Kerbin: { g: 9.81, atm: 1 },
+  Mun: { parent: 'Kerbin', int: 860, cap: 0, low: 310, land: 580, g: 1.63 },
+  Minmus: { parent: 'Kerbin', int: 930, cap: 0, low: 160, land: 180, g: 0.491 },
+  Moho: { parent: 'Kerbol', int: 760, cap: 0, low: 2410, land: 870, g: 2.7 },
+  Eve: { parent: 'Kerbol', int: 90, cap: 80, low: 1330, land: 8000, descent: 80, g: 16.7, atm: 5 },
+  Gilly: { parent: 'Eve', int: 60, cap: 0, low: 410, land: 30, g: 0.049 },
+  Duna: { parent: 'Kerbol', int: 130, cap: 250, low: 360, land: 1450, descent: 250, g: 2.94, atm: 0.067 },
+  Ike: { parent: 'Duna', int: 30, cap: 0, low: 180, land: 390, g: 1.1 },
+  Dres: { parent: 'Kerbol', int: 610, cap: 0, low: 1290, land: 430, g: 1.13 },
+  Jool: { parent: 'Kerbol', int: 980, cap: 160, low: 2810, land: null, g: 7.85, atm: 15, gas: true },
+  Laythe: { parent: 'Jool', int: 930, cap: 0, low: 1070, land: 2900, descent: 100, g: 7.85, atm: 0.6 },
+  Vall: { parent: 'Jool', int: 620, cap: 0, low: 910, land: 860, g: 2.31 },
+  Tylo: { parent: 'Jool', int: 400, cap: 0, low: 1100, land: 2270, g: 7.85 },
+  Bop: { parent: 'Jool', int: 220, cap: 0, low: 900, land: 230, g: 0.589 },
+  Pol: { parent: 'Jool', int: 160, cap: 0, low: 820, land: 130, g: 0.373 },
+  Eeloo: { parent: 'Kerbol', int: 1140, cap: 0, low: 1370, land: 620, g: 1.69 },
 };
-const GOALS = {
-  lko: { name: 'Low Kerbin orbit', ph: ['launch'], body: null },
-  munFlyby: { name: 'Mun flyby', ph: ['launch', 'transfer'], body: 'Mun' },
-  munOrbit: { name: 'Mun orbit', ph: ['launch', 'transfer', 'capture'], body: 'Mun' },
-  munLand: { name: 'Mun landing', ph: ['launch', 'transfer', 'capture', 'land'], body: 'Mun' },
-  munReturn: { name: 'Mun landing and return', ph: ['launch', 'transfer', 'capture', 'land', 'ascent', 'home'], body: 'Mun', ret: true },
-  minmusOrbit: { name: 'Minmus orbit', ph: ['launch', 'transfer', 'capture'], body: 'Minmus' },
-  minmusLand: { name: 'Minmus landing', ph: ['launch', 'transfer', 'capture', 'land'], body: 'Minmus' },
-  minmusReturn: { name: 'Minmus landing and return', ph: ['launch', 'transfer', 'capture', 'land', 'ascent', 'home'], body: 'Minmus', ret: true },
-};
-const phasesOf = goal => GOALS[goal].ph.map(k => PH[k](GOALS[goal].body));
+const KERBIN_ESCAPE = 950;
+const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return' };
+const isPlanet = b => BODY[b].parent === 'Kerbol';
+const the = b => ['Mun'].includes(b) ? 'the Mun' : b;
+// phases for a goal key "Body:mission"
+function phasesOf(goal) {
+  const [b, mis] = goal.split(':'), B = BODY[b], out = [{ k: 'launch', name: 'Launch to low Kerbin orbit', dv: 3400, body: 'Kerbin' }];
+  if (b === 'Kerbin') return out;
+  const par = B.parent;
+  if (par === 'Kerbin') out.push({ k: 'transfer', name: `Transfer to ${the(b)}`, dv: B.int, body: 'Kerbin' });
+  else if (par === 'Kerbol') out.push({ k: 'transfer', name: 'Escape Kerbin', dv: KERBIN_ESCAPE, body: 'Kerbin' }, { k: 'transfer', name: `Transfer to ${b}`, dv: B.int, body: 'Kerbin' });
+  else { const P = BODY[par]; out.push({ k: 'transfer', name: 'Escape Kerbin', dv: KERBIN_ESCAPE, body: 'Kerbin' }, { k: 'transfer', name: `Transfer to ${par}`, dv: P.int, body: 'Kerbin' }, { k: 'orbit', name: `Capture at ${par}`, dv: P.cap, body: par }, { k: 'transfer', name: `Transfer to ${b}`, dv: B.int, body: par }); }
+  if (mis === 'flyby') return out.filter(p => p.dv > 0);
+  if (B.cap) out.push({ k: 'orbit', name: `Capture at ${the(b)}`, dv: B.cap, body: b });
+  out.push({ k: 'orbit', name: `Low orbit at ${the(b)}`, dv: B.low, body: b });
+  const lands = mis === 'land' || mis === 'landReturn';
+  if (lands && B.land != null) out.push({ k: 'land', name: `Landing on ${the(b)}`, dv: B.descent != null ? B.descent : B.land, body: b, atm: B.atm || 0, chute: B.descent != null });
+  if (mis === 'landReturn' || mis === 'orbitReturn') {
+    if (mis === 'landReturn' && B.land != null) out.push({ k: 'ascent', name: `Ascent from ${the(b)}`, dv: B.land, body: b, atm: B.atm || 0 });
+    // back the way it came; Kerbin's air does the braking at the end
+    out.push({ k: 'orbit', name: `Leave ${the(b)}`, dv: B.low + B.cap, body: b });
+    if (par !== 'Kerbin' && par !== 'Kerbol') { const P = BODY[par]; out.push({ k: 'transfer', name: `Leave ${par}'s moons`, dv: B.int, body: par }, { k: 'orbit', name: `Escape ${par}`, dv: P.cap, body: par }, { k: 'transfer', name: 'Transfer to Kerbin', dv: P.int, body: par }); }
+    else if (par === 'Kerbol') out.push({ k: 'transfer', name: 'Transfer to Kerbin', dv: B.int, body: b });
+  }
+  return out.filter(p => p.dv > 0);
+}
+const goalName = goal => { const [b, m] = goal.split(':'); return b === 'Kerbin' ? 'Low Kerbin orbit' : `${b} ${MISSIONS[m]}`; };
+const goalInfo = goal => { const [b, m] = goal.split(':'); return { body: b, mission: m, ret: m === 'landReturn' || m === 'orbitReturn', lands: m === 'land' || m === 'landReturn', name: goalName(goal) }; };
+// kept for older saves and callers
+const GOALS = new Proxy({}, { get: (_, k) => typeof k === 'string' && k.includes(':') ? Object.assign(goalInfo(k), { ph: phasesOf(k).map(p => p.k) }) : undefined });
+const LEGACY = { lko: 'Kerbin:orbit', munFlyby: 'Mun:flyby', munOrbit: 'Mun:orbit', munLand: 'Mun:land', munReturn: 'Mun:landReturn', minmusOrbit: 'Minmus:orbit', minmusLand: 'Minmus:land', minmusReturn: 'Minmus:landReturn' };
 // TWR each phase needs at the start of every burn chunk (thrust / weight on that body)
 function twrNeed(ph, cum) {
   if (ph.k === 'launch') return cum < 300 ? 1.25 : cum < 1500 ? 1.0 : cum < 2600 ? 0.6 : 0.3;
-  if (ph.k === 'land') return 2.0;
+  if (ph.k === 'land') return ph.chute ? 0 : 2.0; // parachutes and air do the work on Eve, Duna and Laythe
   if (ph.k === 'ascent') return 1.6;
   return 0.15;
 }
@@ -431,12 +464,12 @@ function evaluate(g, goal, inv, detail, lim) {
       const ph = phases[pi];
       const dm = Math.min(left, mm * 0.02);
       // Isp: blended toward sea level in the thick lower atmosphere during launch
-      const atm = ph && ph.k === 'launch' ? Math.max(0, 1 - cumLaunch / 1400) : 0;
-      const isp = ivac - (ivac - iasl) * atm * 0.6;
+      const atm = !ph ? 0 : ph.k === 'launch' ? Math.max(0, 1 - cumLaunch / 1400) : ph.k === 'ascent' && ph.atm ? ph.atm * Math.max(0, 1 - inPh / (ph.dv * 0.45)) : 0;
+      const isp = Math.max(ivac * 0.15, ivac - (ivac - iasl) * atm * 0.6);
       const dv = isp * G0 * Math.log(mm / (mm - dm));
       if (!ph) { extra += dv; did.Spare = (did.Spare || 0) + dv; } else did[ph.name] = (did[ph.name] || 0) + dv;
       if (ph) {
-        const thrust = sg.tv - (sg.tv - sg.ta) * atm, w = mm * BODY[ph.body].g, need = twrNeed(ph, cumLaunch);
+        const thrust = Math.max(sg.tv * 0.15, sg.tv - (sg.tv - sg.ta) * atm), w = mm * BODY[ph.body].g, need = twrNeed(ph, cumLaunch);
         const twr = thrust / w;
         if (twr < need) { const sh = (need - twr) / need; worst = Math.max(worst, sh); if (!fails.some(f => f.ph === ph.name)) fails.push({ ph: ph.name, twr, need }); }
         inPh += dv; if (ph.k === 'launch') cumLaunch += dv;
@@ -492,9 +525,11 @@ function catalog(inv) {
 // extras chosen by rule, not search: parachute for goals that come home, legs for landings, fins on the first stage
 function fixtures(goal, inv, cat) {
   const fix = {};
-  const G = GOALS[goal], pick = f => Object.keys(inv).filter(id => BY[id] && inv[id] > 0 && f(BY[id])).sort((a, b) => BY[a].m - BY[b].m);
-  if (G.ret || goal === 'lko') { const c = pick(p => p.chute && p.chute.full > 15)[0]; if (c) fix[c] = 1; }
-  if (G.ph.includes('land')) { const l = pick(p => p.leg && !p.gear)[0]; if (l) fix[l] = Math.min(4, inv[l]) >= 3 ? Math.min(4, inv[l]) : 0; if (!fix[l]) delete fix[l]; }
+  const G = goalInfo(goal), pick = f => Object.keys(inv).filter(id => BY[id] && inv[id] > 0 && f(BY[id])).sort((a, b) => BY[a].m - BY[b].m);
+  const ph = phasesOf(goal), chuteLand = ph.some(p => p.chute);
+  if (G.ret || G.body === 'Kerbin' || chuteLand) { const c = pick(p => p.chute && p.chute.full > 15); if (c[0]) fix[c[0]] = G.body === 'Eve' && inv[c[0]] >= 3 ? 3 : G.body === 'Duna' && inv[c[0]] >= 2 ? 2 : 1; }
+  if (G.ret && isPlanet(G.body) || (G.ret && !['Kerbin', 'Mun', 'Minmus'].includes(BODY[G.body].parent))) { const hs = pick(p => p.shield)[0]; if (hs) fix[hs] = 1; }
+  if (G.lands) { const l = pick(p => p.leg && !p.gear)[0]; if (l) fix[l] = Math.min(4, inv[l]) >= 3 ? Math.min(4, inv[l]) : 0; if (!fix[l]) delete fix[l]; }
   const f = pick(p => p.rfin)[0]; if (f && inv[f] >= 3) fix[f] = Math.min(4, inv[f]);
   void cat;
   return fix;
@@ -560,7 +595,7 @@ function optimize(inv, goal, opts = {}) {
   const lightCmd = C.cmds.slice().sort((a, b) => BY[a].m - BY[b].m);
   for (let rs = 0; rs < restarts; rs++) {
     const r = rng(1234 + rs * 7919);
-    let g = { cmd: GOALS[goal].ret ? (lightCmd.find(id => !BY[id].probe && !BY[id].plane) || lightCmd[0]) : lightCmd[rs % lightCmd.length], fix: Object.assign({}, fix), stages: [], boost: null };
+    let g = { cmd: goalInfo(goal).ret ? (lightCmd.find(id => !BY[id].probe && !BY[id].plane) || lightCmd[0]) : lightCmd[rs % lightCmd.length], fix: Object.assign({}, fix), stages: [], boost: null };
     // seed: biggest engine with as many tanks of its size as fit
     const e0 = C.engs.slice().sort((a, b) => BY[b].tv - BY[a].tv)[rs % C.engs.length];
     g.stages.push({ eng: e0, n: BY[e0].d === 'r' ? Math.min(4, inv[e0]) : 1, tanks: [], dec: null });
@@ -585,7 +620,7 @@ function unusedOf(g, inv) {
   return out;
 }
 
-const api = { GOALS, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, BODY, usableProp };
+const api = { GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -750,7 +785,7 @@ function score(d, goal, lim) {
   const ph = O.phasesOf(goal).slice(1), need = ph.reduce((a, p) => a + p.dv, 0);
   const R = d.rocket ? BY[d.rocket.id] : BY[d.jet.id], n = d.rocket ? d.rocket.n : d.jet.n;
   const fails = [];
-  for (const p of ph) { const g = O.BODY[p.body].g, twr = n * R.tv / (f.mOrbit * g), want = p.k === 'land' ? 2 : p.k === 'ascent' ? 1.6 : 0.15; if (twr < want) fails.push({ ph: p.name, twr, need: want }); }
+  for (const p of ph) { const g = O.BODY[p.body].g, twr = n * R.tv / (f.mOrbit * g), want = p.k === 'land' ? (p.chute ? 0 : 2) : p.k === 'ascent' ? 1.6 : 0.15; if (twr < want) fails.push({ ph: p.name, twr, need: want }); }
   const margin = f.dvLeft - need;
   return { score: -limPen + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length, margin, fails, lims, f, cost: k.cost, parts: k.parts };
 }
@@ -815,7 +850,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (x, d = 0) => Number(x).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 const LS = 'shipopt.v1';
-let st = { inv: {}, goal: 'munLand', cat: 'All', mine: false, tab: 'parts', career: { on: false, nodes: ['Start'], vab: 1, sph: 1, pad: 1, runway: 1, rnd: 1 } };
+let st = { inv: {}, goal: 'Mun:land', cat: 'All', mine: false, tab: 'parts', career: { on: false, nodes: ['Start'], vab: 1, sph: 1, pad: 1, runway: 1, rnd: 1 } };
 try { Object.assign(st, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (e) { /* first run */ }
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(st)); } catch (e) { /* storage off */ } };
 const toast = (m, ms = 2600) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); };
@@ -866,8 +901,26 @@ $('plist').addEventListener('change', e => { const i = e.target.closest('input[d
 function setTab(t) { if (st.tab !== t) document.querySelector('main').scrollTop = 0; st.tab = t; document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'parts') renderList(); }
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 // ---- goal tab
-$('goal').innerHTML = Object.entries(O.GOALS).map(([k, g]) => `<option value="${k}">${esc(g.name)} — ${fmt(O.phasesOf(k).reduce((a, p) => a + p.dv, 0))} m/s</option>`).join('');
-$('goal').value = st.goal; $('goal').onchange = e => { st.goal = e.target.value; save(); };
+// goal: any stock body, and what to do there
+if (!String(st.goal).includes(':')) st.goal = O.LEGACY[st.goal] || 'Mun:land';
+const GROUPS = [['Kerbin and its moons', ['Kerbin', 'Mun', 'Minmus']], ['Inner planets', ['Moho', 'Eve', 'Gilly']], ['Duna', ['Duna', 'Ike']], ['Outer planets', ['Dres', 'Jool', 'Laythe', 'Vall', 'Tylo', 'Bop', 'Pol', 'Eeloo']]];
+const bodyLabel = b => b === 'Kerbin' ? 'Kerbin (orbit)' : O.BODY[b].parent === 'Kerbol' ? b : `${b} (moon of ${O.BODY[b].parent})`;
+$('dest').innerHTML = GROUPS.map(([g, bs]) => `<optgroup label="${g}">${bs.map(b => `<option value="${b}">${bodyLabel(b)}</option>`).join('')}</optgroup>`).join('');
+function renderGoal() {
+  const [b, m0] = st.goal.split(':'), B = O.BODY[b];
+  $('dest').value = b;
+  const ms = b === 'Kerbin' ? ['orbit'] : Object.keys(O.MISSIONS).filter(m => !(B.gas && (m === 'land' || m === 'landReturn')));
+  const m = ms.includes(m0) ? m0 : ms.includes('land') ? 'land' : 'orbit';
+  st.goal = b + ':' + m;
+  $('mission').innerHTML = ms.map(k => `<option value="${k}">${b === 'Kerbin' ? 'Low orbit' : O.MISSIONS[k][0].toUpperCase() + O.MISSIONS[k].slice(1)}</option>`).join('');
+  $('mission').value = m; $('mission').disabled = b === 'Kerbin';
+  const ph = O.phasesOf(st.goal);
+  $('goalDv').innerHTML = `<b>${fmt(ph.reduce((a, p) => a + p.dv, 0))} m/s</b> in all: ${ph.map(p => `${esc(p.name)} ${fmt(p.dv)}`).join(' · ')}.${B.atm && b !== 'Kerbin' && ph.some(p => p.k === 'land') ? ` ${b} has air: the landing counts on parachutes${b === 'Eve' ? ' (several)' : ''}, and the climb back out needs sea-level thrust.` : ''} Surface gravity ${fmt(B.g / 9.81, 2)} g.`;
+  save();
+}
+$('dest').onchange = e => { st.goal = e.target.value + ':' + st.goal.split(':')[1]; renderGoal(); };
+$('mission').onchange = e => { st.goal = st.goal.split(':')[0] + ':' + e.target.value; renderGoal(); };
+renderGoal();
 // optimizer runs in a worker so the screen stays responsive
 const SRC = ['parts', 'opt', 'plane'].map(k => document.getElementById('src-' + k)).filter(Boolean);
 let worker = null;
