@@ -58,6 +58,8 @@ label.ck { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px }
 .tier h4 { margin: 12px 0 6px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
 .node { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 8px 9px; border-radius: 6px; background: var(--panel); margin-bottom: 4px; border: 1px solid transparent }
 .node.on { background: #233022; border-color: #4e7f2c } .node input { width: 20px; height: 20px; margin: 1px 0 0 } .node .t { font-weight: 600 } .node .pp { font-size: 12px; color: var(--muted) } .node .c { font-size: 12.5px; color: var(--blue); white-space: nowrap }
+.qty .pin { font-size: 15px; opacity: .45; filter: grayscale(1) } .qty .pin[aria-pressed=true] { opacity: 1; filter: none; background: rgba(244,182,58,.2); border-color: #f4b63a }
+.musttag { display: inline-block; margin-top: 3px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #1a1406; background: #f4b63a; padding: 1px 7px; border-radius: 8px }
 .pr.lock { opacity: .55 } .lockt { color: var(--bad); font-size: 12px }
 .fab { position: fixed; right: 14px; bottom: max(14px, env(safe-area-inset-bottom, 0px)); z-index: 5; box-shadow: 0 4px 12px rgba(0,0,0,.5) }
 
@@ -798,6 +800,17 @@ function optimize(inv, goal, opts = {}) {
   const iters = opts.iters || 6000, restarts = opts.restarts || 6;
   if (opts.objective === 'science') C.sci = Object.keys(inv).filter(id => BY[id] && BY[id].sci && inv[id] > 0);
   opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin' });
+  // parts you said must be used: the command part is fixed, engines and tanks seed the search, anything else rides along
+  const must = (opts.must || []).filter(id => BY[id] && (inv[id] || 0) > 0);
+  const mustCmd = must.find(id => BY[id].cmd);
+  if (mustCmd) C.cmds = [mustCmd];
+  for (const id of must) { const p = BY[id]; if (!p.cmd && !(p.ta != null) && !(p.cat === 'Fuel tanks') && !p.dec && !p.sci) fix[id] = Math.max(fix[id] || 0, 1); }
+  const evalM = (g2, detail) => {
+    const e = evaluate(g2, goal, inv, detail, opts.limits);
+    const u = partsUsed(g2), miss = must.filter(id => !(u[id] > 0));
+    if (miss.length) { e.score -= 6000 * miss.length; e.ok = false; e.stab = (e.stab || []).concat(miss.map(id => `Doesn't use ${BY[id].t}, which you marked as must-use.`)); }
+    return e;
+  };
   let best = null;
   const lightCmd = C.cmds.slice().sort((a, b) => BY[a].m - BY[b].m);
   for (let rs = 0; rs < restarts; rs++) {
@@ -806,19 +819,24 @@ function optimize(inv, goal, opts = {}) {
     // seed: biggest engine with as many tanks of its size as fit
     const e0 = C.engs.slice().sort((a, b) => BY[b].tv - BY[a].tv)[rs % C.engs.length];
     g.stages.push({ eng: e0, n: BY[e0].d === 'r' ? Math.min(4, inv[e0]) : 1, tanks: [], dec: null });
+    if (mustCmd) g.cmd = mustCmd;
+    const mEng = must.filter(id => BY[id].ta != null && !BY[id].srb), mSrb = must.find(id => BY[id].srb), mTank = must.filter(id => BY[id].cat === 'Fuel tanks'), mDec = must.filter(id => BY[id].dec && !BY[id].radial);
+    if (mEng.length) g.stages = mEng.map((e, i) => ({ eng: e, n: BY[e].d === 'r' ? Math.min(4, inv[e]) : 1, tanks: i === 0 ? mTank.slice() : [], dec: i ? (mDec[i - 1] || C.decs[0] || null) : null }));
+    else if (mTank.length && g.stages[0]) g.stages[0].tanks = mTank.slice();
+    if (mSrb) { const d0 = C.decs.find(id => (inv[id] || 0) > 0); if (d0) g.stages.push({ eng: mSrb, n: 1, tanks: [], dec: d0 }); }
     if (!fits(g, inv)) g.stages = [];
-    let cur = evaluate(g, goal, inv, false, opts.limits), curG = g;
+    let cur = evalM(g), curG = g;
     for (let it = 0; it < iters; it++) {
       const T = 600 * Math.pow(0.002, it / iters);
       const cand = fixDecs(tidy(mutate(curG, inv, C, r)), inv, C);
       if (!fits(cand, inv)) continue;
-      const e = evaluate(cand, goal, inv, false, opts.limits);
+      const e = evalM(cand);
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curG = cand; }
       if (!best || cur.score > best.e.score) best = { g: clone(curG), e: cur };
     }
     if (opts.progress) opts.progress((rs + 1) / restarts);
   }
-  const d = evaluate(best.g, goal, inv, true, opts.limits);
+  const d = evalM(best.g, true);
   return { g: best.g, r: d, goal, unused: unusedOf(best.g, inv) };
 }
 function unusedOf(g, inv) {
@@ -1102,6 +1120,8 @@ function optimize(inv, goal, opts = {}) {
   opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin', task: opts.task || null });
   const used = d => { const c = {}; const a = (id, n = 1) => { c[id] = (c[id] || 0) + n; }; a(d.cmd); for (const [id, n] of Object.entries(d.fix || {})) a(id, n); d.tanks.forEach(t => a(t)); a(d.jet.id, d.jet.n); if (d.rocket) a(d.rocket.id, d.rocket.n); d.intakes.forEach(([id, n]) => a(id, n)); d.wings.forEach(([id, n]) => a(id, n)); a(d.gear.id, d.gear.n); return c; };
   const fitsP = d => Object.entries(used(d)).every(([id, n]) => (inv[id] || 0) >= n);
+  const must = (opts.must || []).filter(id => BY[id] && (inv[id] || 0) > 0);
+  const scoreM = d => { const e = score(d, goal, opts.limits), u = used(d), miss = must.filter(id => !(u[id] > 0)); if (miss.length) { e.score -= 6000 * miss.length; e.ok = false; e.stab = (e.stab || []).concat(miss.map(id => `Doesn't use ${BY[id].t}, which you marked as must-use.`)); } return e; };
   let best = null;
   const iters = opts.iters || 900, restarts = opts.restarts || 5;
   for (let rs = 0; rs < restarts; rs++) {
@@ -1111,7 +1131,12 @@ function optimize(inv, goal, opts = {}) {
     let d = { cmd: cmds[0], tanks: tanks.slice(0, 1), jet: { id: j0, n: Math.min(inv[j0], 2) }, rocket: BY[j0].ta != null || opts.task ? null : (rockets[0] ? { id: rockets[0], n: 1 } : null),
       intakes: [[intakes[0], Math.min(inv[intakes[0]], 2)]], wings: [[wings[0], Math.min(inv[wings[0]], 2)]], gear, fix: sciFix };
     if (!fitsP(d)) { d.jet.n = 1; d.intakes[0][1] = 1; d.wings[0][1] = Math.min(inv[wings[0]], 2); }
-    let cur = fitsP(d) ? score(d, goal, opts.limits) : { score: -1e9 }, curD = d;
+    for (const id of must) { // seed the must-use parts
+      const p = BY[id];
+      if (p.cmd) d.cmd = id; else if (p.jet) d.jet = { id, n: Math.min(inv[id], d.jet.n || 1) }; else if (p.ta != null) d.rocket = { id, n: p.d === 'r' ? Math.min(2, inv[id]) : 1 };
+      else if (p.cat === 'Fuel tanks' && p.d !== 'r') d.tanks.push(id); else if (p.intake) d.intakes.push([id, 1]); else if (p.wing) d.wings.push([id, Math.min(2, inv[id])]); else if (p.gear) d.gear = { id, n: Math.min(3, inv[id]) }; else d.fix = Object.assign({}, d.fix, { [id]: 1 });
+    }
+    let cur = fitsP(d) ? scoreM(d) : { score: -1e9 }, curD = d;
     for (let it = 0; it < iters; it++) {
       const n = JSON.parse(JSON.stringify(curD)), mv = r();
       const u = used(n), av = id => (inv[id] || 0) - (u[id] || 0);
@@ -1121,15 +1146,15 @@ function optimize(inv, goal, opts = {}) {
       else if (mv < 0.56 && rockets.length) { if (n.rocket && r() < 0.25) n.rocket = null; else { const e = pick(rockets); const rad = BY[e].d === 'r'; n.rocket = { id: e, n: rad ? [2, 4][Math.floor(r() * 2)] : 1 + Math.floor(r() * Math.min(2, inv[e])) }; } }
       else if (mv < 0.72) { const id = pick(wings), i = n.wings.findIndex(w => w[0] === id); const step = r() < 0.5 ? 2 : -2; if (i >= 0) { n.wings[i][1] = Math.max(0, n.wings[i][1] + step); if (!n.wings[i][1]) n.wings.splice(i, 1); } else if (step > 0) n.wings.push([id, 2]); }
       else if (mv < 0.86) { const id = pick(intakes), i = n.intakes.findIndex(w => w[0] === id); const step = r() < 0.55 ? 1 : -1; if (i >= 0) { n.intakes[i][1] = Math.max(0, n.intakes[i][1] + step); if (!n.intakes[i][1]) n.intakes.splice(i, 1); } else if (step > 0) n.intakes.push([id, 1]); }
-      else n.cmd = pick(cmds);
+      else if (!must.some(id => BY[id].cmd)) n.cmd = pick(cmds);
       if (!n.wings.length || !n.intakes.length || !fitsP(n)) continue;
-      const e = score(n, goal, opts.limits), T = 400 * Math.pow(0.003, it / iters);
+      const e = scoreM(n), T = 400 * Math.pow(0.003, it / iters);
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curD = n; }
       if (!best || cur.score > best.e.score) best = { d: JSON.parse(JSON.stringify(curD)), e: cur };
     }
     if (opts.progress) opts.progress((rs + 1) / restarts);
   }
-  const fin = score(best.d, goal, opts.limits); if (!opts.task) fin.track = fly(best.d, { track: true }).track;
+  const fin = scoreM(best.d); if (!opts.task) fin.track = fly(best.d, { track: true }).track;
   const u = used(best.d), unused = {};
   for (const [id, n] of Object.entries(inv)) { const left = n - (u[id] || 0); if (left > 0) unused[id] = left; }
   return { d: best.d, r: fin, goal, unused, plane: true };
@@ -1438,7 +1463,7 @@ const fmt = (x, d = 0) => Number(x).toLocaleString('en-US', { maximumFractionDig
 const LS = 'shipopt.v1';
 let st = { inv: {}, goal: 'Mun:land', cat: 'All', mine: false, tab: 'parts', career: { on: false, nodes: ['Start'], vab: 1, sph: 1, pad: 1, runway: 1, rnd: 1 } };
 try { Object.assign(st, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (e) { /* first run */ }
-st.src = st.src || 'mine';
+st.src = st.src || 'mine'; st.must = st.must || [];
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(st)); } catch (e) { /* storage off */ } };
 const toast = (m, ms = 2600) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); };
 const sizeName = d => d === 'r' ? 'radial' : d === 'mk2' ? 'Mk2' : d === 'mk3' ? 'Mk3' : d + ' m';
@@ -1459,7 +1484,7 @@ function renderCats() { $('cats').innerHTML = CATS.filter(c => c === 'All' || PA
 function renderList() {
   const q = $('q').value.trim().toLowerCase();
   const list = PARTS.filter(p => !locked(p.id) && (st.cat === 'All' || p.cat === st.cat) && (!q || p.t.toLowerCase().includes(q)) && (!st.mine || st.inv[p.id] > 0));
-  $('plist').innerHTML = list.map(p => { const n = st.inv[p.id] || 0, lk = locked(p.id); return `<div class="pr ${n ? 'has' : ''} ${lk ? 'lock' : ''}"><div style="min-width:0"><div class="t">${esc(p.t)}</div><div class="s">${esc(partLine(p))}</div>${lk ? `<div class="lockt">Not researched: ${esc(p.tech)}</div>` : ''}</div><div class="qty"><button type="button" data-d="-1" data-id="${p.id}" aria-label="Fewer">−</button><input inputmode="numeric" data-id="${p.id}" value="${n}" aria-label="How many"><button type="button" data-d="1" data-id="${p.id}" aria-label="More">+</button></div></div>`; }).join('') || '<p class="note">No parts match.</p>';
+  $('plist').innerHTML = list.map(p => { const n = st.inv[p.id] || 0, lk = locked(p.id); return `<div class="pr ${n ? 'has' : ''} ${lk ? 'lock' : ''}"><div style="min-width:0"><div class="t">${esc(p.t)}</div><div class="s">${esc(partLine(p))}</div>${lk ? `<div class="lockt">Not researched: ${esc(p.tech)}</div>` : ''}${st.must.includes(p.id) ? '<div class="musttag">Must use</div>' : ''}</div><div class="qty"><button type="button" class="pin" data-pin="${p.id}" aria-pressed="${st.must.includes(p.id)}" aria-label="Must use this part" title="Must use">📌</button><button type="button" data-d="-1" data-id="${p.id}" aria-label="Fewer">−</button><input inputmode="numeric" data-id="${p.id}" value="${n}" aria-label="How many"><button type="button" data-d="1" data-id="${p.id}" aria-label="More">+</button></div></div>`; }).join('') || '<p class="note">No parts match.</p>';
   renderSum();
 }
 const unlockedSet = () => new Set(st.career.nodes);
@@ -1468,7 +1493,7 @@ const usable = () => {
   const mine = Object.fromEntries(Object.entries(st.inv).filter(([id, n]) => n > 0 && !locked(id)));
   if (st.src !== 'auto') return mine;
   const inv = O.autoInventory(p => !locked(p.id));
-  for (const [id, n] of Object.entries(mine)) if (BY[id].sci) inv[id] = n; // your science parts still ride along
+  for (const [id, n] of Object.entries(mine)) if (BY[id].sci || st.must.includes(id)) inv[id] = Math.max(inv[id] || 0, n); // your science parts and must-use parts still come along
   if (st.objective === 'science') for (const p of PARTS) if (p.sci && !locked(p.id) && !inv[p.id]) inv[p.id] = p.id === 'goo' || p.id === 'scijr' ? 4 : 1; // offer every experiment
   return inv;
 };
@@ -1493,13 +1518,16 @@ function renderSum() {
   const nLocked = Object.keys(st.inv).filter(id => st.inv[id] > 0 && locked(id)).length;
   const n = ids.reduce((a, id) => a + st.inv[id], 0);
   const cmd = ids.some(id => BY[id].cmd), eng = ids.some(id => BY[id].ta != null || BY[id].jet);
-  $('invSum').innerHTML = n ? `<b>${n}</b> parts of <b>${ids.length}</b> kinds. ${cmd ? '' : '<span class="warn">Add a pod, cockpit or probe.</span> '}${eng ? '' : '<span class="warn">Add an engine.</span>'} Set how many of each you have; the optimizer may leave some out.${nLocked ? ` <span class="warn">${nLocked} kind${nLocked > 1 ? 's' : ''} you added ${nLocked > 1 ? 'are' : 'is'} no longer researched, so hidden and left out.</span>` : ''}${st.career.on ? ` <span class="note">Career: VAB ${st.career.vab}, Pad ${st.career.pad}, SPH ${st.career.sph}, Runway ${st.career.runway}.</span>` : ''}` : 'Tap + on the parts you want to build with and set how many you have.';
+  $('invSum').innerHTML = n ? `<b>${n}</b> part${n === 1 ? '' : 's'} of <b>${ids.length}</b> kind${ids.length === 1 ? '' : 's'}. ${st.src === 'auto' ? '<span class="note">Goal is set to Any parts, so these are extras: science and must-use parts.</span> ' : `${cmd ? '' : '<span class="warn">Add a pod, cockpit or probe.</span> '}${eng ? '' : '<span class="warn">Add an engine.</span>'}`} Set how many of each you have; the optimizer may leave some out. Tap 📌 to make it use a part.${st.must.length ? ` <b>${st.must.length}</b> must-use.` : ''}${nLocked ? ` <span class="warn">${nLocked} kind${nLocked > 1 ? 's' : ''} you added ${nLocked > 1 ? 'are' : 'is'} no longer researched, so hidden and left out.</span>` : ''}${st.career.on ? ` <span class="note">Career: VAB ${st.career.vab}, Pad ${st.career.pad}, SPH ${st.career.sph}, Runway ${st.career.runway}.</span>` : ''}` : 'Tap + on the parts you want to build with and set how many you have.';
 }
 $('cats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; st.cat = b.dataset.cat; renderCats(); renderList(); save(); });
 $('q').addEventListener('input', renderList);
 $('btnMine').onclick = () => { st.mine = !st.mine; $('btnMine').setAttribute('aria-pressed', st.mine); $('btnMine').classList.toggle('primary', st.mine); renderList(); save(); };
-$('btnClear').onclick = () => { if (!Object.keys(st.inv).length) return; st.inv = {}; renderList(); save(); toast('Cleared your parts.'); };
-$('plist').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; const id = b.dataset.id; st.inv[id] = Math.max(0, (st.inv[id] || 0) + +b.dataset.d); if (!st.inv[id]) delete st.inv[id]; const row = b.closest('.pr'), inp = row.querySelector('input'); inp.value = st.inv[id] || 0; inp.classList.remove('bump'); void inp.offsetWidth; inp.classList.add('bump'); row.classList.toggle('has', !!st.inv[id]); renderSum(); save(); });
+$('btnClear').onclick = () => { if (!Object.keys(st.inv).length) return; st.inv = {}; st.must = []; renderList(); save(); toast('Cleared your parts.'); };
+$('plist').addEventListener('click', e => {
+  const pin = e.target.closest('[data-pin]');
+  if (pin) { const id = pin.dataset.pin, on = !st.must.includes(id); st.must = on ? st.must.concat(id) : st.must.filter(x => x !== id); if (on && !(st.inv[id] > 0)) st.inv[id] = 1; save(); renderList(); toast(on ? `${BY[id].t} must be used.` : `${BY[id].t} is optional again.`, 1600); return; }
+  const b = e.target.closest('[data-d]'); if (!b) return; const id = b.dataset.id; st.inv[id] = Math.max(0, (st.inv[id] || 0) + +b.dataset.d); if (!st.inv[id]) { delete st.inv[id]; if (st.must.includes(id)) { st.must = st.must.filter(x => x !== id); renderList(); } } const row = b.closest('.pr'), inp = row.querySelector('input'); inp.value = st.inv[id] || 0; inp.classList.remove('bump'); void inp.offsetWidth; inp.classList.add('bump'); row.classList.toggle('has', !!st.inv[id]); renderSum(); save(); });
 $('plist').addEventListener('change', e => { const i = e.target.closest('input[data-id]'); if (!i) return; const v = Math.max(0, Math.min(99, parseInt(i.value, 10) || 0)); if (v) st.inv[i.dataset.id] = v; else delete st.inv[i.dataset.id]; i.value = v; i.closest('.pr').classList.toggle('has', !!v); renderSum(); save(); });
 // ---- tabs
 function moveInd() { const b = document.querySelector('[data-tab][aria-selected=true]'), i = $('navInd'); if (b && i) { i.style.left = (b.offsetLeft + b.offsetWidth * .18) + 'px'; i.style.width = (b.offsetWidth * .64) + 'px'; } }
@@ -1557,8 +1585,8 @@ let worker = null;
 function makeWorker() {
   try {
     const code = [...document.querySelectorAll('script:not([src])')].slice(0, 3).map(s => s.textContent).join('\n') +
-      `\nself.onmessage = e => { const { kind, inv, goal, eff, limits, objective, task } = e.data; const prog = p => self.postMessage({ prog: p, kind });
-       try { const r = kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective, task }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective }); self.postMessage({ done: r, kind }); }
+      `\nself.onmessage = e => { const { kind, inv, goal, eff, limits, objective, task, must } = e.data; const prog = p => self.postMessage({ prog: p, kind });
+       try { const r = kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective, task, must }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective, must }); self.postMessage({ done: r, kind }); }
        catch (err) { self.postMessage({ done: { error: err.message }, kind }); } };`;
     return new Worker(URL.createObjectURL(new Blob([code.replace(/typeof window !== 'undefined' \? window : globalThis/g, 'self')], { type: 'text/javascript' })));
   } catch (e) { return null; }
@@ -1569,8 +1597,8 @@ function runKind(kind, eff, onProg) {
     if (!worker) worker = makeWorker();
     if (worker) {
       const h = e => { if (e.data.kind !== kind) return; if (e.data.prog != null) onProg(e.data.prog); if (e.data.done) { worker.removeEventListener('message', h); res(e.data.done); } };
-      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null });
-    } else setTimeout(() => res(kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective })), 30);
+      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must.filter(id => !locked(id)) });
+    } else setTimeout(() => res(kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
   });
 }
 $('btnRun').onclick = async () => {

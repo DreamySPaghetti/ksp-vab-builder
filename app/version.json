@@ -1,8 +1,8 @@
 {
-  "web": 28,
+  "web": 29,
   "apk": 3,
-  "sha256": "02b910352a78ae9c3a1faeeb836af36d225f8e4a91dae7ef7743ae01ce27ab24",
-  "notes": "More ways to pick the best ship: lightest, fewest parts and most science (with science points per trip)",
+  "sha256": "44828ffdc2a81f4d34f8c2c399c0d0ceba3c2b143981692817fd603395c46c35",
+  "notes": "Must-use parts: tap the pin on any part to force the optimizer to use it",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
