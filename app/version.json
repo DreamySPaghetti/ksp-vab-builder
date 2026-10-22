@@ -1,8 +1,8 @@
 {
-  "web": 24,
+  "web": 25,
   "apk": 3,
-  "sha256": "c9cfc65d4722ab93bffdfa88d03310dedccf2b52a184da363a2465e02bf9fcb5",
-  "notes": "Decouplers match the stage they sit on",
+  "sha256": "7a56d886bfe3e65d38583c45143bbc47a9e1fd676abd5cc02f277a102e95963d",
+  "notes": "Aircraft goals: biome flybys, cargo ferries and speed/altitude tests around Kerbin",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
