@@ -368,6 +368,11 @@ sci('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.6, 'Advanced Expl
 sci('comm16', 'Communotron 16', 0.005, 300, 'r', 0.6, 'Engineering 101');
 sci('z100', 'Z-100 Rechargeable Battery Pack', 0.005, 80, 'r', 0.2, 'Basic Science');
 sci('oxstat', 'OX-STAT Photovoltaic Panels', 0.005, 75, 'r', 0.1, 'Electrics');
+// engine gimbal range (degrees; stock configs): the steering a rocket has off the pad. 0 = fixed nozzle.
+const GIMBAL = { spider: 10, twitch: 8, thud: 8, ant: 0, spark: 3, terrier: 4, reliant: 0, swivel: 3, vector: 10.5, dart: 0, nerv: 1, poodle: 4.5, skipper: 2, mainsail: 2, twinboar: 1.5, rhino: 4, mammoth: 1, puff: 6, rapier: 3, thoroughbred: 2.5, clydesdale: 2.5 };
+// reaction-wheel torque (kN·m, KSP wiki Reaction wheel page)
+const TORQUE = { mk1pod: 5, 'mk1-3pod': 15, landerSmall: 3, landerMk2: 15, cockpitMk1: 10, cockpitMk1i: 10, cockpitMk2: 15, cockpitMk3: 40, okto: 0.3, hecs: 0.5, hecs2: 10, rc001s: 0.5, rcl01: 1.5, mk2drone: 15 };
+for (const p of P) { if (p.ta != null) p.gimbal = GIMBAL[p.id] || 0; if (p.cmd) p.torque = TORQUE[p.id] || 0; }
 const BY = Object.fromEntries(P.map(p => [p.id, p]));
 const api = { PARTS: P, BY, TECH, BUILD };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PARTS = api;
@@ -409,6 +414,8 @@ const BODY = {
 };
 const KERBIN_ESCAPE = 950;
 const MISSIONS = { flyby: 'flyby', orbit: 'orbit', land: 'landing', orbitReturn: 'orbit and return', landReturn: 'landing and return' };
+const esc0 = s => String(s);
+const cumBefore = (segs, sg) => { let c = 0; for (const x of segs) { if (x === sg) break; c += x.dv; } return c; };
 const isPlanet = b => BODY[b].parent === 'Kerbol';
 const the = b => ['Mun'].includes(b) ? 'the Mun' : b;
 // phases for a goal key "Body:mission"
@@ -569,6 +576,34 @@ function evaluate(g, goal, inv, detail, lim) {
   // goal-specific must-haves
   const notes = [];
   if (!segs.length) notes.push('No engine with fuel.');
+  // ---- will it fly straight? steering off the pad, a pointed nose, fins, not too long and thin
+  const stab = [];
+  {
+    const cmdP = B(g.cmd), finId = Object.keys(g.fix || {}).find(id => B(id).rfin), finLift = finId ? B(finId).lift * g.fix[finId] : 0;
+    const ctrlFins = finId && ['avr8', 'deltadeluxe'].includes(finId);
+    const launchSegs = perSeg.filter(sg => (sg.did['Launch to low Kerbin orbit'] || 0) > 0).slice(0, 2);
+    for (const sg of launchSegs) {
+      const s0 = g.stages[sg.stage], e = s0 && s0.eng && B(s0.eng);
+      const steer = (e && e.gimbal > 0) || ctrlFins || (cmdP.torque || 0) >= sg.m0 * 0.5;
+      if (!steer) stab.push(`Nothing can steer stage ${g.stages.length - sg.stage} off the pad (${e ? esc0(e.t) + ' has a fixed nozzle' : 'no engine'}${ctrlFins ? '' : ', no control fins'}, ${esc0(cmdP.t)} has ${cmdP.torque || 0} kN·m of torque).`);
+    }
+    const flatTop = cmdP.probe && !Object.keys(g.fix || {}).some(id => B(id).cone || B(id).chute);
+    if (flatTop) stab.push(`${esc0(cmdP.t)} has a flat top: add a nose cone (or a parachute on top) so it doesn't tumble.`);
+    const m = total;
+    if (finLift < 0.02 * m && !(launchSegs[0] && g.stages[launchSegs[0].stage] && B(g.stages[launchSegs[0].stage].eng || 'mk1pod').gimbal >= 2)) stab.push(`Needs more fin area at the bottom: about ${(0.02 * m).toFixed(1)} lift of fins for ${m.toFixed(0)} t (it has ${finLift.toFixed(2)}).`);
+    let hgt = cmdP.h, wid = sz(cmdP.d);
+    for (const s0 of g.stages) { if (s0.dec) hgt += 0.2; for (const t of s0.tanks) { const q = B(t); if (q.d !== 'r') { hgt += q.h; wid = Math.max(wid, sz(q.d)); } } if (s0.eng && B(s0.eng).d !== 'r') { hgt += B(s0.eng).h; wid = Math.max(wid, sz(B(s0.eng).d)); } }
+    if (g.boost) wid += 2 * (sz(B(g.boost.unit).d) || 1.25);
+    if (hgt / Math.max(wid, .6) > 16) stab.push(`Very long and thin (${hgt.toFixed(0)} m tall, ${wid.toFixed(2)} m wide): it will bend and flip. Use wider tanks or struts.`);
+  }
+  // solid boosters can't be throttled, shut off or restarted: only good for the first part of the climb
+  for (const sg of perSeg) {
+    const s0 = g.stages[sg.stage]; if (!s0 || !s0.eng || !B(s0.eng).srb) continue;
+    const other = Object.entries(sg.did).filter(([k]) => k !== 'Launch to low Kerbin orbit' && k !== 'Spare').reduce((a, [, v]) => a + v, 0);
+    if (other > 20) stab.push(`${esc0(B(s0.eng).t)} would have to fly ${Object.keys(sg.did).filter(k => k !== 'Launch to low Kerbin orbit' && k !== 'Spare').join(', ')}, but solid boosters can't throttle or restart.`);
+    if (sg.stage === 0 || cumBefore(perSeg, sg) + sg.dv > 2600) stab.push(`${esc0(B(s0.eng).t)} burns into the upper part of the climb; circularising needs a liquid engine.`);
+  }
+  const stabPen = stab.length * 2500;
   // decouplers should match what they join; profile fuselages (Mk2/Mk3) belong on planes
   let decSteps = 0, profile = 0;
   g.stages.forEach((st0, i) => {
@@ -592,11 +627,11 @@ function evaluate(g, goal, inv, detail, lim) {
     if (lim.size) { if (hgt > lim.size[1]) lims.push({ what: 'height', have: hgt, max: lim.size[1] }); if (wid > lim.size[0]) lims.push({ what: 'width', have: wid, max: lim.size[0] }); }
   }
   const limPen = lims.reduce((a, l) => a + 3000 + 3000 * (l.have - l.max) / l.max, 0);
-  const ok = fails.length === 0 && margin >= 0 && !lims.length;
-  let score = -limPen + margin - (fails.length ? 1500 + 4000 * worst : 0) - sizeSteps * 90 - parts * 0.5 - cost * 1e-4;
+  const ok = fails.length === 0 && margin >= 0 && !lims.length && !stab.length;
+  let score = -limPen - stabPen + margin - (fails.length ? 1500 + 4000 * worst : 0) - sizeSteps * 90 - parts * 0.5 - cost * 1e-4;
   // "cheapest that makes it": once the goal is reached with a reserve, cheaper and smaller wins
   if (lim && lim.objective === 'cheap') { const reserve = Math.max(150, need * 0.05); score = ok && margin >= reserve ? 1e5 - cost * 0.3 - parts * 5 - sizeSteps * 200 : score - reserve; }
-  const r = { score, margin, ok, fails, lims, need, mass: total, cost, parts };
+  const r = { score, margin, ok, fails, lims, stab, need, mass: total, cost, parts };
   if (detail) Object.assign(r, { st, segs: perSeg, bo, joins, phases, payload, total, used, sizeSteps });
   return r;
 }
@@ -625,7 +660,7 @@ function fixtures(goal, inv, cat) {
   if (G.ret || G.body === 'Kerbin' || chuteLand) { const c = pick(p => p.chute && p.chute.full > 15); if (c[0]) fix[c[0]] = G.body === 'Eve' && inv[c[0]] >= 3 ? 3 : G.body === 'Duna' && inv[c[0]] >= 2 ? 2 : 1; }
   if (G.ret && isPlanet(G.body) || (G.ret && !['Kerbin', 'Mun', 'Minmus'].includes(BODY[G.body].parent))) { const hs = pick(p => p.shield)[0]; if (hs) fix[hs] = 1; }
   if (G.lands) { const l = pick(p => p.leg && !p.gear)[0]; if (l) fix[l] = Math.min(4, inv[l]) >= 3 ? Math.min(4, inv[l]) : 0; if (!fix[l]) delete fix[l]; }
-  const f = pick(p => p.rfin)[0]; if (f && inv[f] >= 3) fix[f] = Math.min(4, inv[f]);
+  const fl = pick(p => p.rfin && inv[p.id] >= 3).sort((a, b) => BY[b].lift - BY[a].lift); if (fl[0]) fix[fl[0]] = Math.min(4, inv[fl[0]]); // the biggest fins you have
   // science experiments are the payload: everything you add goes along
   for (const id of Object.keys(inv)) if (BY[id] && BY[id].sci && inv[id] > 0) fix[id] = inv[id];
   void cat;
@@ -677,7 +712,7 @@ function mutate(g, inv, C, r) {
 
 // tidy: drop empty stages and boosters that can't burn
 function tidy(g) {
-  g.stages = g.stages.filter(s => s.eng || s.tanks.length);
+  g.stages = g.stages.filter(s => (s.eng && (BY[s.eng].srb || BY[s.eng].lf || s.tanks.length)) || (!s.eng && s.tanks.length)); // an engine needs fuel
   if (g.stages.length) g.stages[0].dec = null;
   return g;
 }
@@ -685,6 +720,10 @@ function tidy(g) {
 // swap each decoupler for one the size of the stage it sits on, when you have one
 function fixDecs(g, inv, C) {
   const used = partsUsed(g);
+  // probes have flat tops: give them a nose cone of their size when there's one spare
+  const cp = BY[g.cmd], hasTop = Object.keys(g.fix || {}).some(id => BY[id].cone || (BY[id].chute && BY[id].d !== 'r'));
+  if (cp.probe && !hasTop) { const c = C.cones.filter(id => (inv[id] || 0) - (used[id] || 0) > 0).sort((a, b) => Math.abs(sz(BY[a].d) - sz(cp.d)) - Math.abs(sz(BY[b].d) - sz(cp.d)))[0]; if (c) { g.fix = Object.assign({}, g.fix, { [c]: 1 }); used[c] = (used[c] || 0) + 1; } }
+  if (!cp.probe) for (const id of Object.keys(g.fix || {})) if (BY[id].cone) { const f = Object.assign({}, g.fix); delete f[id]; g.fix = f; }
   g.stages.forEach((s, i) => {
     if (!s.dec || i === 0) return;
     const top = (s.tanks.map(t => BY[t]).filter(t => t.d !== 'r').sort((a, b) => sz(a.d) - sz(b.d))[0] || (s.eng ? BY[s.eng] : null));
@@ -1519,7 +1558,7 @@ function airHtml(R) {
 function bindSeg() { document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { view = b.dataset.view; renderResult(); }); }
 function verdict(R, extra) {
   const r = R.r, g = O.GOALS[R.goal];
-  return `<div class="verdict ${r.ok ? 'ok' : 'bad'}"><b>${r.ok ? 'Reaches ' + esc(g.name) : 'Falls short of ' + esc(g.name)}</b>${r.ok ? `${fmt(r.margin)} m/s to spare.` : r.margin < 0 ? `${fmt(-r.margin)} m/s short.` : ''}${(r.lims || []).map(l => ` <span class="warn">${limText(l, R.plane)}</span>`).join('')}${(r.fails || []).map(f => ` <span class="warn">Thrust-to-weight ${fmt(f.twr, 2)} during “${esc(f.ph)}”, needs ${fmt(f.need, 2)}.</span>`).join('')}${extra || ''}</div>`;
+  return `<div class="verdict ${r.ok ? 'ok' : 'bad'}"><b>${r.ok ? 'Reaches ' + esc(g.name) : 'Falls short of ' + esc(g.name)}</b>${r.ok ? `${fmt(r.margin)} m/s to spare.` : r.margin < 0 ? `${fmt(-r.margin)} m/s short.` : ''}${(r.lims || []).map(l => ` <span class="warn">${limText(l, R.plane)}</span>`).join('')}${(r.stab || []).map(t => ` <span class="warn">${esc(t)}</span>`).join('')}${(r.fails || []).map(f => ` <span class="warn">Thrust-to-weight ${fmt(f.twr, 2)} during “${esc(f.ph)}”, needs ${fmt(f.need, 2)}.</span>`).join('')}${extra || ''}</div>`;
 }
 function limText(l, plane) {
   const b = plane ? { parts: 'Spaceplane Hangar', mass: 'Runway', length: 'Runway', width: 'Runway' } : { parts: 'Vehicle Assembly Building', mass: 'Launch Pad', height: 'Launch Pad', width: 'Launch Pad' };
@@ -1561,7 +1600,7 @@ function rocketHtml(R) {
       <div class="m">Δv ${fmt(sgm.dv)} m/s · TWR ${fmt(sgm.twrAsl, 2)} sea level / ${fmt(sgm.twrVac, 2)} vacuum · burn ${fmt(sgm.burn)} s · Isp ${fmt(sgm.iasl)}/${fmt(sgm.ivac)} s · ${fmt(sgm.m0, 1)} → ${fmt(sgm.m1, 1)} t</div>
       <div>${Object.entries(sgm.did).map(([k, v]) => `<span class="ph">${esc(k)}: ${fmt(v)} m/s</span>`).join('')}</div></div>`;
   }
-  h += '</div>' + unusedHtml(R.unused);
+  h += '</div><div class="card"><h3>Flying it</h3><ul style="margin:0;padding-left:20px"><li>Turn on SAS before launch.</li><li>At about 100 m/s, tip 5–10° east, then hold the nose on the prograde marker for the rest of the climb; don\'t turn harder than prograde below 10 km.</li><li>Throttle down if you go faster than about 300 m/s below 10 km.</li><li>Cut the engines when the apoapsis reaches 80 km, coast up, and circularise at apoapsis.</li></ul></div>' + unusedHtml(R.unused);
   h += `<p class="note">Δv per phase uses the stock Δv map; real flights vary with how you fly. Parts marked ≈ in the list use estimated mass or cost.</p>`;
   return h;
 }

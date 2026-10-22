@@ -1,8 +1,8 @@
 {
-  "web": 25,
+  "web": 26,
   "apk": 3,
-  "sha256": "7a56d886bfe3e65d38583c45143bbc47a9e1fd676abd5cc02f277a102e95963d",
-  "notes": "Aircraft goals: biome flybys, cargo ferries and speed/altitude tests around Kerbin",
+  "sha256": "d56e5a221ec3fc5370f0f1ce50ac97c8e78034cbcfc69c088d1b2f6ddaed6cb3",
+  "notes": "Steadier rockets: needs steering off the pad, a pointed nose, enough fins, not too long and thin; solid boosters only low in the climb; flying tips",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
