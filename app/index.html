@@ -144,6 +144,9 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
     </section>
     <section id="tab-goal" hidden>
       <div class="card"><h3>Goal</h3><div class="row" style="flex-wrap:nowrap"><select id="dest" aria-label="Destination"></select><select id="mission" aria-label="Mission"></select></div><p class="note" id="goalDv" style="margin:8px 0 0"></p>
+        <div class="seg" role="group" aria-label="Parts to use" style="margin-top:12px"><button type="button" data-src="mine">My parts</button><button type="button" data-src="auto">Any parts (auto)</button></div>
+        <label class="ck"><span style="min-width:120px">Best means</span><select id="objective" style="width:auto"><option value="margin">Most Δv to spare</option><option value="cheap">Cheapest that makes it</option></select></label>
+        <p class="note" id="srcNote" style="margin:6px 0 0"></p>
         <label class="ck"><input type="checkbox" id="optRocket" checked> <span>Try rockets (stacked stages, boosters)</span></label>
         <label class="ck"><input type="checkbox" id="optPlane" checked> <span>Try spaceplanes (runway takeoff, jets, then rockets)</span></label>
         <label class="ck"><span style="min-width:120px">Search effort</span><select id="effort" style="width:auto"><option value="1">Quick</option><option value="2" selected>Normal</option><option value="4">Thorough</option></select></label>
@@ -340,7 +343,7 @@ leg('ly60', 'LY-60 Large Landing Gear', 0.45, 1500, { gear: true, a: 1 });
 // Stock tech tree (KSP wiki, Technology tree page): [name, tier, science cost, required nodes, any one of them (1) or all (0)]
 const TECH = [["Start",1,0,[],1],["Basic Rocketry",2,5,["Start"],1],["Engineering 101",2,5,["Start"],1],["Survivability",3,15,["Engineering 101"],1],["Stability",3,18,["Engineering 101","Basic Rocketry"],1],["General Rocketry",3,20,["Basic Rocketry"],1],["Aviation",4,45,["Stability"],1],["Basic Science",4,45,["Survivability"],1],["Flight Control",4,45,["Survivability","Stability"],1],["Advanced Rocketry",4,45,["General Rocketry"],1],["General Construction",4,45,["Stability","General Rocketry"],1],["Propulsion Systems",5,90,["Advanced Rocketry"],1],["Space Exploration",5,90,["Basic Science"],1],["Advanced Flight Control",5,90,["Flight Control"],1],["Landing",5,90,["Flight Control","Aviation"],1],["Aerodynamics",5,90,["Aviation","General Construction"],1],["Electrics",5,90,["Basic Science"],1],["Heavy Rocketry",5,90,["Advanced Rocketry"],1],["Fuel Systems",5,90,["Advanced Rocketry","General Construction"],1],["Advanced Construction",5,90,["General Construction"],1],["Miniaturization",5,90,["Basic Science"],1],["Actuators",6,160,["Advanced Construction"],1],["Command Modules",6,160,["Space Exploration","Advanced Flight Control"],1],["Heavier Rocketry",6,160,["Heavy Rocketry"],1],["Precision Engineering",6,160,["Miniaturization","Electrics"],1],["Advanced Exploration",6,160,["Space Exploration"],1],["Specialized Control",6,160,["Advanced Flight Control"],1],["Advanced Landing",6,160,["Landing"],1],["Supersonic Flight",6,160,["Aerodynamics"],1],["Adv. Fuel Systems",6,160,["Propulsion Systems","Fuel Systems"],1],["Advanced Electrics",6,160,["Electrics"],1],["Specialized Construction",6,160,["Advanced Construction"],1],["Precision Propulsion",6,160,["Propulsion Systems"],1],["Advanced Aerodynamics",6,160,["Aerodynamics"],1],["Heavy Landing",7,300,["Advanced Landing"],1],["Scanning Tech",7,300,["Advanced Exploration","Precision Engineering"],1],["Unmanned Tech",7,300,["Precision Engineering"],1],["Nuclear Propulsion",7,300,["Adv. Fuel Systems","Heavier Rocketry"],0],["Advanced MetalWorks",7,300,["Specialized Construction"],1],["Field Science",7,300,["Advanced Landing","Advanced Exploration"],1],["High Altitude Flight",7,300,["Supersonic Flight"],1],["Large Volume Containment",7,300,["Adv. Fuel Systems","Specialized Construction"],1],["Composites",7,300,["Specialized Construction"],1],["Electronics",7,300,["Precision Engineering","Advanced Electrics"],1],["High-Power Electrics",7,300,["Advanced Electrics"],1],["Heavy Aerodynamics",7,300,["Advanced Aerodynamics"],1],["Ion Propulsion",8,550,["Scanning Tech","Unmanned Tech"],0],["Hypersonic Flight",8,550,["High Altitude Flight"],1],["Nanolathing",8,550,["Advanced MetalWorks"],1],["Advanced Unmanned Tech",8,550,["Unmanned Tech"],1],["Meta-Materials",8,550,["Composites"],1],["Very Heavy Rocketry",8,550,["Large Volume Containment","Heavier Rocketry"],1],["Advanced Science Tech",8,550,["Scanning Tech","Field Science"],1],["Advanced Motors",8,550,["Field Science"],1],["Specialized Electrics",8,550,["High-Power Electrics"],1],["High-Performance Fuel Systems",8,550,["Large Volume Containment"],1],["Experimental Aerodynamics",8,550,["Heavy Aerodynamics"],1],["Automation",8,550,["Unmanned Tech","Electronics"],1],["Aerospace Tech",9,1000,["Hypersonic Flight"],1],["Large Probes",9,1000,["Advanced Unmanned Tech","Automation"],1],["Experimental Science",9,1000,["Advanced Science Tech"],1],["Experimental Motors",9,1000,["Advanced Motors"],1],["Experimental Electrics",9,1000,["Specialized Electrics"],1]];
 const PART_TECH = {"mk1pod":"Start","mk1-3pod":"Command Modules","landerSmall":"Advanced Flight Control","landerMk2":"Command Modules","cockpitMk2":"Supersonic Flight","cockpitMk3":"Heavy Aerodynamics","hecs2":"Advanced Unmanned Tech","mk2drone":"Automation","oscarB":"Propulsion Systems","flt100":"Basic Rocketry","flt200":"General Rocketry","flt400":"Advanced Rocketry","flt800":"Fuel Systems","x200-8":"Fuel Systems","x200-16":"Fuel Systems","x200-32":"Fuel Systems","jumbo64":"Adv. Fuel Systems","s3-3600":"Large Volume Containment","s3-7200":"Large Volume Containment","s3-14400":"High-Performance Fuel Systems","r4":"Precision Propulsion","r11":"Propulsion Systems","r12":"Precision Propulsion","mk2lfoS":"Supersonic Flight","mk3lfoS":"Experimental Aerodynamics","mk3lfo":"Experimental Aerodynamics","mk3lfoL":"Experimental Aerodynamics","mk2lfS":"Supersonic Flight","mk3lfS":"Heavy Aerodynamics","mk3lfL":"Experimental Aerodynamics","ncs":"Aerodynamics","spider":"Precision Propulsion","twitch":"Precision Propulsion","thud":"Advanced Rocketry","ant":"Propulsion Systems","spark":"Propulsion Systems","terrier":"Advanced Rocketry","reliant":"General Rocketry","swivel":"Basic Rocketry","vector":"Very Heavy Rocketry","dart":"Hypersonic Flight","nerv":"Nuclear Propulsion","poodle":"Heavy Rocketry","skipper":"Heavy Rocketry","mainsail":"Heavier Rocketry","twinboar":"Heavier Rocketry","rhino":"Very Heavy Rocketry","mammoth":"Very Heavy Rocketry","puff":"Precision Propulsion","rapier":"Aerospace Tech","shrimp":"Precision Propulsion","mite":"Propulsion Systems","flea":"Start","hammer":"Basic Rocketry","thumper":"General Rocketry","kickback":"Heavy Rocketry","thoroughbred":"Heavier Rocketry","clydesdale":"Very Heavy Rocketry","panther":"Supersonic Flight","whiplash":"Hypersonic Flight","goliath":"Heavy Aerodynamics","circularS":"Aviation","ramp":"High Altitude Flight","shockcone":"Hypersonic Flight","xmg50":"Aerodynamics","dsi":"High Altitude Flight","precooler":"Hypersonic Flight","connA":"Aerodynamics","connB":"Aviation","connD":"Advanced Aerodynamics","deltaS":"Advanced Aerodynamics","structA":"Supersonic Flight","structD":"Advanced Aerodynamics","sweptA":"Advanced Aerodynamics","swept":"Aviation","bigSdelta":"Experimental Aerodynamics","bigSstrake":"Experimental Aerodynamics","fat455":"Heavy Aerodynamics","elevon1":"Aviation","elevon3":"Advanced Aerodynamics","elevon5":"Advanced Aerodynamics","bigSelevon1":"Experimental Aerodynamics","bigSelevon2":"Experimental Aerodynamics","canard":"Advanced Aerodynamics","canardAdv":"Hypersonic Flight","fat455tail":"Heavy Aerodynamics","bigStail":"Experimental Aerodynamics","basicfin":"Start","avt1":"Stability","avr8":"Flight Control","deltadeluxe":"Flight Control","noseCone":"Stability","noseConeS":"Aerodynamics","noseCone25":"Advanced Construction","td06":"Precision Engineering","td12":"Engineering 101","td25":"General Construction","td37":"Large Volume Containment","tt38k":"Stability","tt70":"Advanced Construction","fla10":"Miniaturization","kerbodyneAdp":"Large Volume Containment","mk3to25":"Heavy Aerodynamics","mk3toMk2":"Experimental Aerodynamics","mk16":"Start","mk16xl":"Landing","mk2r":"Survivability","mk25":"Advanced Landing","mk12r":"Survivability","hs125":"Survivability","hs25":"Landing","lt05":"Survivability","lt1":"Landing","lt2":"Advanced Landing","ly10":"Landing","ly35":"Advanced Landing","ly60":"Heavy Landing","cockpitMk1":"Aviation","juno":"Aviation","mk0lf":"Aviation","mk1lf":"Aviation","connE":"Aviation","structC":"Aviation","ly01":"Aviation","ly05":"Aviation","tailfin":"Aviation","cockpitMk1i":"Aerodynamics","wheesley":"Aerodynamics","nacelle":"Aerodynamics","connC":"Aerodynamics","structB":"Aerodynamics","sweptB":"Aerodynamics","circular":"Aerodynamics","okto":"Electrics","hecs":"Precision Engineering","rc001s":"Advanced Unmanned Tech","rcl01":"Large Probes","mk2lfo":"High Altitude Flight","mk2lf":"High Altitude Flight","mk3lf":"Heavy Aerodynamics","delta":"Advanced Aerodynamics","strake":"Supersonic Flight","elevon2":"Advanced Aerodynamics","rockomaxAdp":"General Construction","mk2to125":"Supersonic Flight"};
-for (const p of P) p.tech = PART_TECH[p.id] || 'Start';
+for (const p of P) p.tech = p.tech || PART_TECH[p.id] || 'Start';
 // Building levels (stock, as in CustomBarnKit's defaults): part count, mass (t), size w×h×l (m), R&D node cost limit
 const BUILD = {
   vab: { name: 'Vehicle Assembly Building', parts: [30, 255, Infinity] },
@@ -349,6 +352,22 @@ const BUILD = {
   runway: { name: 'Runway', mass: [18, 140, Infinity], size: [[15, 20, 15], [28, 36, 28], null] },
   rnd: { name: 'Research & Development', cost: [100, 500, Infinity] },
 };
+// science experiments and support parts: always carried when you add them (tech nodes from the wiki's tree; masses and costs as listed in game, a few approximate)
+const sci = (id, t, m, c, d, h, tech, o = {}) => P.push(Object.assign({ cat: 'Science', id, t, m, dry: m, $: c, d, h, sci: true, tech }, o));
+sci('goo', 'Mystery Goo Containment Unit', 0.05, 800, 'r', 0.5, 'Start');
+sci('thermo', '2HOT Thermometer', 0.005, 900, 'r', 0.15, 'Engineering 101');
+sci('baro', 'PresMat Barometer', 0.005, 880, 'r', 0.15, 'Survivability');
+sci('scijr', 'SC-9001 Science Jr.', 0.2, 1000, 1.25, 1.0, 'Basic Science');
+sci('esu', 'Experiment Storage Unit', 0.04, 1000, 'r', 0.3, 'Basic Science', { a: 1 });
+sci('seismic', 'Double-C Seismic Accelerometer', 0.005, 6000, 'r', 0.2, 'Electronics');
+sci('magneto', 'Magnetometer Boom', 0.05, 2800, 'r', 0.4, 'Electronics', { a: 1 });
+sci('gravioli', 'GRAVMAX Negative Gravioli Detector', 0.005, 8000, 'r', 0.2, 'Advanced Science Tech');
+sci('afsv', 'Atmospheric Fluid Spectro-Variometer', 0.005, 6500, 'r', 0.3, 'Scanning Tech', { a: 1 });
+sci('weather', 'PD-3 Weather Analyzer', 0.05, 2500, 'r', 0.3, 'Precision Engineering', { a: 1 });
+sci('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.6, 'Advanced Exploration');
+sci('comm16', 'Communotron 16', 0.005, 300, 'r', 0.6, 'Engineering 101');
+sci('z100', 'Z-100 Rechargeable Battery Pack', 0.005, 80, 'r', 0.2, 'Basic Science');
+sci('oxstat', 'OX-STAT Photovoltaic Panels', 0.005, 75, 'r', 0.1, 'Electrics');
 const BY = Object.fromEntries(P.map(p => [p.id, p]));
 const api = { PARTS: P, BY, TECH, BUILD };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PARTS = api;
@@ -550,7 +569,16 @@ function evaluate(g, goal, inv, detail, lim) {
   // goal-specific must-haves
   const notes = [];
   if (!segs.length) notes.push('No engine with fuel.');
-  const sizeSteps = joins.filter(j => !j.adp).length;
+  // decouplers should match what they join; profile fuselages (Mk2/Mk3) belong on planes
+  let decSteps = 0, profile = 0;
+  g.stages.forEach((st0, i) => {
+    st0.tanks.forEach(t => { if (B(t).d === 'mk2' || B(t).d === 'mk3') profile++; });
+    if (!st0.dec || i === 0) return;
+    const above = g.stages[i - 1], aboveD = above.eng && B(above.eng).d !== 'r' ? B(above.eng).d : (above.tanks.map(B).filter(t => t.d !== 'r').pop() || {}).d;
+    const belowD = (st0.tanks.map(B).filter(t => t.d !== 'r').sort((x, y) => sz(x.d) - sz(y.d))[0] || (st0.eng ? B(st0.eng) : {})).d;
+    const dd = B(st0.dec).d; if (dd !== aboveD && dd !== belowD) decSteps++;
+  });
+  const sizeSteps = joins.filter(j => !j.adp).length + decSteps + profile * 0.5;
   const cost = Object.entries(used).reduce((a, [id, n]) => a + B(id).$ * n, 0) + joins.reduce((a, j) => a + (j.adp ? B(j.adp).$ : 0), 0);
   const parts = Object.values(used).reduce((a, n) => a + n, 0) + joins.filter(j => j.adp).length;
   // building limits (career): part count, launch mass, size on the pad
@@ -565,7 +593,9 @@ function evaluate(g, goal, inv, detail, lim) {
   }
   const limPen = lims.reduce((a, l) => a + 3000 + 3000 * (l.have - l.max) / l.max, 0);
   const ok = fails.length === 0 && margin >= 0 && !lims.length;
-  const score = -limPen + margin - (fails.length ? 1500 + 4000 * worst : 0) - sizeSteps * 90 - parts * 0.5 - cost * 1e-4;
+  let score = -limPen + margin - (fails.length ? 1500 + 4000 * worst : 0) - sizeSteps * 90 - parts * 0.5 - cost * 1e-4;
+  // "cheapest that makes it": once the goal is reached with a reserve, cheaper and smaller wins
+  if (lim && lim.objective === 'cheap') { const reserve = Math.max(150, need * 0.05); score = ok && margin >= reserve ? 1e5 - cost * 0.3 - parts * 5 - sizeSteps * 200 : score - reserve; }
   const r = { score, margin, ok, fails, lims, need, mass: total, cost, parts };
   if (detail) Object.assign(r, { st, segs: perSeg, bo, joins, phases, payload, total, used, sizeSteps });
   return r;
@@ -596,6 +626,8 @@ function fixtures(goal, inv, cat) {
   if (G.ret && isPlanet(G.body) || (G.ret && !['Kerbin', 'Mun', 'Minmus'].includes(BODY[G.body].parent))) { const hs = pick(p => p.shield)[0]; if (hs) fix[hs] = 1; }
   if (G.lands) { const l = pick(p => p.leg && !p.gear)[0]; if (l) fix[l] = Math.min(4, inv[l]) >= 3 ? Math.min(4, inv[l]) : 0; if (!fix[l]) delete fix[l]; }
   const f = pick(p => p.rfin)[0]; if (f && inv[f] >= 3) fix[f] = Math.min(4, inv[f]);
+  // science experiments are the payload: everything you add goes along
+  for (const id of Object.keys(inv)) if (BY[id] && BY[id].sci && inv[id] > 0) fix[id] = inv[id];
   void cat;
   return fix;
 }
@@ -656,6 +688,7 @@ function optimize(inv, goal, opts = {}) {
   if (!C.engs.length) return { error: 'Add at least one engine.' };
   const fix = fixtures(goal, inv, C);
   const iters = opts.iters || 6000, restarts = opts.restarts || 6;
+  opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin' });
   let best = null;
   const lightCmd = C.cmds.slice().sort((a, b) => BY[a].m - BY[b].m);
   for (let rs = 0; rs < restarts; rs++) {
@@ -685,7 +718,17 @@ function unusedOf(g, inv) {
   return out;
 }
 
-const api = { GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
+// every part you could build with (unlocked ones in career), in generous numbers, for "build the best ship for me"
+function autoInventory(allowed) {
+  const inv = {};
+  for (const p of Object.values(BY)) {
+    if (allowed && !allowed(p)) continue;
+    if (p.sci) continue;
+    inv[p.id] = p.cmd ? 1 : p.cat === 'Fuel tanks' ? 10 : p.ta != null || p.jet ? (p.d === 'r' ? 8 : 4) : p.dec ? (p.radial ? 8 : 4) : p.adp ? 2 : p.chute ? 3 : p.leg ? 4 : p.rfin ? 4 : p.wing ? 8 : p.intake ? 6 : p.cone ? 8 : p.shield ? 1 : 2;
+  }
+  return inv;
+}
+const api = { autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -852,6 +895,7 @@ function score(d, goal, lim) {
   const fails = [];
   for (const p of ph) { const g = O.BODY[p.body].g, twr = n * R.tv / (f.mOrbit * g), want = p.k === 'land' ? (p.chute ? 0 : 2) : p.k === 'ascent' ? 1.6 : 0.15; if (twr < want) fails.push({ ph: p.name, twr, need: want }); }
   const margin = f.dvLeft - need;
+  if (lim && lim.objective === 'cheap') { const reserve = Math.max(150, need * 0.05 + 50), okk = margin >= reserve && !fails.length && !lims.length; if (okk) return { score: 1e5 - k.cost * 0.3 - k.parts * 5, ok: true, margin, fails, lims, f, cost: k.cost, parts: k.parts }; }
   return { score: -limPen + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length, margin, fails, lims, f, cost: k.cost, parts: k.parts };
 }
 
@@ -867,7 +911,9 @@ function optimize(inv, goal, opts = {}) {
   const gear = { id: gears.slice().sort((a, b) => BY[a].m - BY[b].m)[0], n: Math.min(inv[gears[0]], 3) };
   const gearPick = gears.find(id => inv[id] >= 3); if (!gearPick) return { error: 'Need 3 landing gear of one type.' };
   gear.id = gearPick; gear.n = 3;
-  const used = d => { const c = {}; const a = (id, n = 1) => { c[id] = (c[id] || 0) + n; }; a(d.cmd); d.tanks.forEach(t => a(t)); a(d.jet.id, d.jet.n); if (d.rocket) a(d.rocket.id, d.rocket.n); d.intakes.forEach(([id, n]) => a(id, n)); d.wings.forEach(([id, n]) => a(id, n)); a(d.gear.id, d.gear.n); return c; };
+  const sciFix = Object.fromEntries(ids.filter(id => BY[id].sci).map(id => [id, inv[id]]));
+  opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin' });
+  const used = d => { const c = {}; const a = (id, n = 1) => { c[id] = (c[id] || 0) + n; }; a(d.cmd); for (const [id, n] of Object.entries(d.fix || {})) a(id, n); d.tanks.forEach(t => a(t)); a(d.jet.id, d.jet.n); if (d.rocket) a(d.rocket.id, d.rocket.n); d.intakes.forEach(([id, n]) => a(id, n)); d.wings.forEach(([id, n]) => a(id, n)); a(d.gear.id, d.gear.n); return c; };
   const fitsP = d => Object.entries(used(d)).every(([id, n]) => (inv[id] || 0) >= n);
   let best = null;
   const iters = opts.iters || 900, restarts = opts.restarts || 5;
@@ -876,7 +922,7 @@ function optimize(inv, goal, opts = {}) {
     const pick = a => a[Math.floor(r() * a.length)];
     const j0 = jets[rs % jets.length];
     let d = { cmd: cmds[0], tanks: tanks.slice(0, 1), jet: { id: j0, n: Math.min(inv[j0], 2) }, rocket: BY[j0].ta != null ? null : (rockets[0] ? { id: rockets[0], n: 1 } : null),
-      intakes: [[intakes[0], Math.min(inv[intakes[0]], 2)]], wings: [[wings[0], Math.min(inv[wings[0]], 2)]], gear };
+      intakes: [[intakes[0], Math.min(inv[intakes[0]], 2)]], wings: [[wings[0], Math.min(inv[wings[0]], 2)]], gear, fix: sciFix };
     if (!fitsP(d)) { d.jet.n = 1; d.intakes[0][1] = 1; d.wings[0][1] = Math.min(inv[wings[0]], 2); }
     let cur = fitsP(d) ? score(d, goal, opts.limits) : { score: -1e9 }, curD = d;
     for (let it = 0; it < iters; it++) {
@@ -1204,6 +1250,7 @@ const fmt = (x, d = 0) => Number(x).toLocaleString('en-US', { maximumFractionDig
 const LS = 'shipopt.v1';
 let st = { inv: {}, goal: 'Mun:land', cat: 'All', mine: false, tab: 'parts', career: { on: false, nodes: ['Start'], vab: 1, sph: 1, pad: 1, runway: 1, rnd: 1 } };
 try { Object.assign(st, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (e) { /* first run */ }
+st.src = st.src || 'mine';
 const save = () => { try { localStorage.setItem(LS, JSON.stringify(st)); } catch (e) { /* storage off */ } };
 const toast = (m, ms = 2600) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); };
 const sizeName = d => d === 'r' ? 'radial' : d === 'mk2' ? 'Mk2' : d === 'mk3' ? 'Mk3' : d + ' m';
@@ -1229,7 +1276,22 @@ function renderList() {
 }
 const unlockedSet = () => new Set(st.career.nodes);
 const locked = id => st.career.on && !unlockedSet().has(BY[id].tech);
-const usable = () => Object.fromEntries(Object.entries(st.inv).filter(([id, n]) => n > 0 && !locked(id)));
+const usable = () => {
+  const mine = Object.fromEntries(Object.entries(st.inv).filter(([id, n]) => n > 0 && !locked(id)));
+  if (st.src !== 'auto') return mine;
+  const inv = O.autoInventory(p => !locked(p.id));
+  for (const [id, n] of Object.entries(mine)) if (BY[id].sci) inv[id] = n; // your science parts still ride along
+  return inv;
+};
+function renderSrc() {
+  document.querySelectorAll('[data-src]').forEach(b => b.setAttribute('aria-pressed', b.dataset.src === st.src));
+  if (!st.objective) st.objective = st.src === 'auto' ? 'cheap' : 'margin';
+  $('objective').value = st.objective;
+  const sciN = Object.entries(st.inv).filter(([id, n]) => n > 0 && BY[id].sci && !locked(id)).reduce((a, [, n]) => a + n, 0);
+  $('srcNote').textContent = (st.src === 'auto' ? `Builds from every ${st.career.on ? 'unlocked ' : ''}part, as many as it needs.${st.objective === 'margin' && !st.career.on ? ' With no building limits, “most Δv” makes enormous rockets; “cheapest that makes it” is usually what you want.' : ''}` : 'Builds only from the parts and counts you set.') + (sciN ? ` Carries your ${sciN} science part${sciN > 1 ? 's' : ''}.` : '');
+}
+document.querySelectorAll('[data-src]').forEach(b => b.onclick = () => { st.src = b.dataset.src; st.objective = st.src === 'auto' ? 'cheap' : 'margin'; renderSrc(); save(); });
+$('objective').onchange = e => { st.objective = e.target.value; renderSrc(); save(); };
 function limitsFor(kind) {
   if (!st.career.on) return null;
   const c = st.career, lv = k => c[k] - 1, cap = v => v === Infinity ? null : v;
@@ -1275,14 +1337,15 @@ function renderGoal() {
 $('dest').onchange = e => { st.goal = e.target.value + ':' + st.goal.split(':')[1]; renderGoal(); };
 $('mission').onchange = e => { st.goal = st.goal.split(':')[0] + ':' + e.target.value; renderGoal(); };
 renderGoal();
+renderSrc();
 // optimizer runs in a worker so the screen stays responsive
 const SRC = ['parts', 'opt', 'plane'].map(k => document.getElementById('src-' + k)).filter(Boolean);
 let worker = null;
 function makeWorker() {
   try {
     const code = [...document.querySelectorAll('script:not([src])')].slice(0, 3).map(s => s.textContent).join('\n') +
-      `\nself.onmessage = e => { const { kind, inv, goal, eff, limits } = e.data; const prog = p => self.postMessage({ prog: p, kind });
-       try { const r = kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits }); self.postMessage({ done: r, kind }); }
+      `\nself.onmessage = e => { const { kind, inv, goal, eff, limits, objective } = e.data; const prog = p => self.postMessage({ prog: p, kind });
+       try { const r = kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective }); self.postMessage({ done: r, kind }); }
        catch (err) { self.postMessage({ done: { error: err.message }, kind }); } };`;
     return new Worker(URL.createObjectURL(new Blob([code.replace(/typeof window !== 'undefined' \? window : globalThis/g, 'self')], { type: 'text/javascript' })));
   } catch (e) { return null; }
@@ -1293,8 +1356,8 @@ function runKind(kind, eff, onProg) {
     if (!worker) worker = makeWorker();
     if (worker) {
       const h = e => { if (e.data.kind !== kind) return; if (e.data.prog != null) onProg(e.data.prog); if (e.data.done) { worker.removeEventListener('message', h); res(e.data.done); } };
-      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff, limits: limitsFor(kind) });
-    } else setTimeout(() => res(kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind) }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind) })), 30);
+      worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective });
+    } else setTimeout(() => res(kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective })), 30);
   });
 }
 $('btnRun').onclick = async () => {
@@ -1312,7 +1375,8 @@ $('btnRun').onclick = async () => {
   }
   clearInterval(qt); $('btnRun').disabled = false; $('prog').hidden = true; $('runNote').textContent = '';
   const good = k => last[k] && !last[k].error ? last[k].r.margin : -Infinity;
-  view = good('plane') > good('rocket') ? 'plane' : 'rocket';
+  const cost = k => last[k] && !last[k].error && last[k].r.ok ? (last[k].r.cost || 0) : Infinity;
+  view = st.objective === 'cheap' && (cost('plane') < Infinity || cost('rocket') < Infinity) ? (cost('plane') < cost('rocket') ? 'plane' : 'rocket') : good('plane') > good('rocket') ? 'plane' : 'rocket';
   renderResult(); setTab('result');
 };
 // ---- result
@@ -1366,6 +1430,8 @@ function rocketHtml(R) {
     if (i === g.stages.length - 1 && g.boost) { const b = g.boost; h += `<li>Boosters, ${b.k}× symmetry on the bottom tank: ${esc(B(b.dec).t)} → ${b.tanks.map(t => esc(B(t).t)).join(' → ')}${b.tanks.length ? ' → ' : ''}${esc(B(b.unit).t)}${b.cone ? `, ${esc(B(b.cone).t)} on top` : ''}</li>`; }
     void joins;
   });
+  const sciFix = fix.filter(([id]) => B(id).sci);
+  if (sciFix.length) h += `<li>Science: ${sciFix.map(([id, n]) => `${n}× ${esc(B(id).t)}`).join(', ')} (${sciFix.some(([id]) => B(id).d !== 'r') ? 'stack parts right under the pod, the rest' : 'on the pod or the top stage'})</li>`;
   for (const [id, n] of radialFix) h += `<li>${n}× ${esc(B(id).t)} (${B(id).leg ? 'around the stage that does the landing' : B(id).rfin ? 'around the bottom' : 'on the pod'})</li>`;
   h += '</ol>';
   const adps = (r.joins || []).filter(j => j.adp), steps = (r.joins || []).filter(j => !j.adp);
@@ -1398,6 +1464,7 @@ function planeHtml(R) {
   h += '</ol><ul style="margin:8px 0 0;padding-left:20px">';
   for (const [id, n] of d.intakes) h += `<li>${n}× ${esc(B(id).t)}</li>`;
   for (const [id, n] of d.wings) h += `<li>${n}× ${esc(B(id).t)}${n % 2 === 0 ? ' (mirror pairs)' : ''}</li>`;
+  for (const [id, n] of Object.entries(d.fix || {})) h += `<li>${n}× ${esc(B(id).t)} (science)</li>`;
   h += `<li>${d.gear.n}× ${esc(B(d.gear.id).t)} (one under the nose, two behind the centre of mass)</li></ul>`;
   h += `<p class="note">Put the wings so the centre of lift sits just behind the centre of mass; the simulation assumes a balanced plane.</p></div>`;
   h += `<div class="card"><h3>Flight plan (simulated)</h3><ul style="margin:0;padding-left:20px">

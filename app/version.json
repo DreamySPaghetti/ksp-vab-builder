@@ -1,8 +1,8 @@
 {
-  "web": 22,
+  "web": 23,
   "apk": 3,
-  "sha256": "193ebb74c81d27a44adbcec2abd3027f9fc899d3e63e4389329e98ac4ff7f9f8",
-  "notes": "3D fixes: cockpits and nozzles no longer inside-out, fuselage parts at their real sizes, tail fins stand upright, smaller canopy and intakes",
+  "sha256": "b623c791046cd183c0505eafb39ae3e0515c4343ea076684b0aa6b859f8bee27",
+  "notes": "Build the best ship for me: any parts (career-aware), cheapest-that-makes-it option, and science parts",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
