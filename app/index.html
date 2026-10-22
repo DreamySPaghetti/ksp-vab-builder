@@ -682,6 +682,18 @@ function tidy(g) {
   return g;
 }
 
+// swap each decoupler for one the size of the stage it sits on, when you have one
+function fixDecs(g, inv, C) {
+  const used = partsUsed(g);
+  g.stages.forEach((s, i) => {
+    if (!s.dec || i === 0) return;
+    const top = (s.tanks.map(t => BY[t]).filter(t => t.d !== 'r').sort((a, b) => sz(a.d) - sz(b.d))[0] || (s.eng ? BY[s.eng] : null));
+    if (!top || BY[s.dec].d === top.d) return;
+    const alt = C.decs.find(id => BY[id].d === top.d && (inv[id] || 0) - (used[id] || 0) > 0);
+    if (alt) { used[s.dec]--; used[alt] = (used[alt] || 0) + 1; s.dec = alt; }
+  });
+  return g;
+}
 function optimize(inv, goal, opts = {}) {
   const C = catalog(inv);
   if (!C.cmds.length) return { error: 'Add a command pod, cockpit or probe core.' };
@@ -701,7 +713,7 @@ function optimize(inv, goal, opts = {}) {
     let cur = evaluate(g, goal, inv, false, opts.limits), curG = g;
     for (let it = 0; it < iters; it++) {
       const T = 600 * Math.pow(0.002, it / iters);
-      const cand = tidy(mutate(curG, inv, C, r));
+      const cand = fixDecs(tidy(mutate(curG, inv, C, r)), inv, C);
       if (!fits(cand, inv)) continue;
       const e = evaluate(cand, goal, inv, false, opts.limits);
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curG = cand; }
