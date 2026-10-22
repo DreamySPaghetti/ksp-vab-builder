@@ -1,8 +1,8 @@
 {
-  "web": 43,
+  "web": 44,
   "apk": 3,
-  "sha256": "e010d19c81dd50a206f06c3849d0cd8b5dfea1aa70cfedd959141c46e4fa97bb",
-  "notes": "Exact transfer windows (Lambert solve over real planet orbits, like alexmoon's Launch Window Planner), return-window dates, and links to the wiki's calculators",
+  "sha256": "21b008b676b5ba55dc2c1775f1370fa00156b48874ad0ea793fb92acd8e7834a",
+  "notes": "Built-in calculators (Tools tab): transfer windows, \u0394v map, orbit changes, circularise, rendezvous, satellite networks with batteries, landing burn, aerobraking/re-entry, stage \u0394v & TWR; missions open them pre-filled",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

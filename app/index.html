@@ -61,6 +61,9 @@ details.more summary { cursor: pointer; color: var(--muted); padding: 4px 0 }
 .step.cur { border-color: var(--acc) }
 .step b { font-size: 16.5px; display: block } .step .d { font-size: 14.5px; margin-top: 3px }
 .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px } .tag { font-size: 12px; padding: 2px 8px; border-radius: 9px; background: var(--panel2) } .tag.dv { background: #233645; color: var(--blue) } .tag.st { background: #3a2f12; color: var(--acc) }
+.res { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: 14px } .res .k { color: var(--muted) } .res .v { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums }
+.tlist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px } .tlist button { text-align: left; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line) } .tlist b { display: block } .tlist span { font-size: 12px; color: var(--muted) }
+.stg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px }
 /* career */
 .bld { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line) } .bld:last-child { border: 0 }
 .lv { display: flex; gap: 4px } .lv button { width: 38px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); font-weight: 700 } .lv button[aria-pressed=true] { background: var(--acc); color: #1a1406 }
@@ -77,9 +80,10 @@ details.more summary { cursor: pointer; color: var(--muted); padding: 4px 0 }
     <section id="v-missions"></section>
     <section id="v-new" hidden></section>
     <section id="v-mission" hidden></section>
+    <section id="v-tools" hidden></section>
     <section id="v-career" hidden></section>
   </main>
-  <nav class="tabs" role="tablist"><button data-go="missions" aria-selected="true"><span class="ic">☰</span>Missions</button><button data-go="new"><span class="ic">＋</span>New mission</button><button data-go="career"><span class="ic">⚙</span>Career</button></nav>
+  <nav class="tabs" role="tablist"><button data-go="missions" aria-selected="true"><span class="ic">☰</span>Missions</button><button data-go="new"><span class="ic">＋</span>New mission</button><button data-go="tools"><span class="ic">∑</span>Tools</button><button data-go="career"><span class="ic">⚙</span>Career</button></nav>
 </div>
 <div class="toast" id="toast" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1462,7 +1466,7 @@ function finishStation(M, res) {
   return { station: true, base: isBase, kasJoin: M.kasJoin, hub: M.hub, portType: M.pt, goal, body, orbit: orb, launches: res.map((x, i) => Object.assign(x, { pkg: M.pkgs[i] })), port: Object.keys(M.pkgs[0].fix).find(id => BY[id].stn === 'port') || null, power: { load, gen, bat, needGen, needBat }, crew: capacity, notes, tested,
     r: { ok, checks, margin: Math.min(...res.map(x => x.r.margin)), cost: sum('cost'), parts: sum('parts'), mass: sum('mass'), stab: notes } };
 }
-const api = { finishStation, evaluateShuttle, optimizeShuttle, shParts, ringsOf, planStation, stationOrbit, baseSite, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
+const api = { kAir, finishStation, evaluateShuttle, optimizeShuttle, shParts, ringsOf, planStation, stationOrbit, baseSite, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -1614,7 +1618,7 @@ function buildPlan(R, opt = {}) {
   } else { // planets, and moons of other planets
     const P = par(body) === 'Kerbol' ? body : par(body), w = planetWindow('Kerbin', P, t0), X = exactWindow('Kerbin', P, t0), dv = dvOf('Escape Kerbin') + dvOf(`Transfer to ${P}`);
     if (X) {
-      S('Transfer', `Wait for the ${P} window`, `Best departure: ${tToDate(X.td).text}${opt.date ? ` (${fmtN((X.td - t0) / DAY)} days from ${tToDate(t0).text})` : ' (set today\'s date on the mission for the right window)'}. Arrives ${tToDate(X.td + X.tof).text}, ${fmtN(X.tof / DAY)} days later. Windows come every ${fmtN(X.syn / DAY)} days. At the window ${P} is about ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin.`, { when: tToDate(X.td).text, link: 'https://alexmoon.github.io/ksp/', linkText: 'Check in Launch Window Planner' });
+      S('Transfer', `Wait for the ${P} window`, `Best departure: ${tToDate(X.td).text}${opt.date ? ` (${fmtN((X.td - t0) / DAY)} days from ${tToDate(t0).text})` : ' (set today\'s date on the mission for the right window)'}. Arrives ${tToDate(X.td + X.tof).text}, ${fmtN(X.tof / DAY)} days later. Windows come every ${fmtN(X.syn / DAY)} days. At the window ${P} is about ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin.`, { when: tToDate(X.td).text, tool: 'window', pre: { from: 'Kerbin', to: P }, toolText: 'More windows' });
       S('Transfer', `Ejection burn to ${P}`, `From low Kerbin orbit, burn prograde when your ship is about ${deg(X.ejection)} from Kerbin's direction of travel, on the side ${X.outward ? 'facing away from' : 'facing'} the Sun: ${fmtN(X.ej)} m/s${Math.abs(X.tilt) > 2 ? `, aimed about ${fmtN(Math.abs(X.tilt))}° ${X.tilt > 0 ? 'north' : 'south'} of Kerbin's orbit (burn a little normal${X.tilt > 0 ? '' : ' anti-normal'})` : ''}. Drag the node until the map shows a ${P} encounter.${X.ej > dv * 1.15 ? ` That's more than the Δv map's ${fmtN(dv)} m/s this craft was sized for: pick a later window if you can.` : ''}`, { dv: X.ej, stage: stg('Escape Kerbin') });
     } else {
       S('Transfer', `Wait for the ${P} window`, `At the window, ${P} is ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} Kerbin around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.${opt.date ? ` Next: ${tToDate(w.when).text}.` : ''}`, { when: opt.date ? tToDate(w.when).text : null });
@@ -1657,7 +1661,7 @@ function buildPlan(R, opt = {}) {
     if (par(body) === 'Kerbin') S('Return', 'Burn for home', `From low orbit, burn prograde on the side of ${the} facing away from its direction of travel around Kerbin (about ${fmtN(leave)} m/s) until your Kerbin periapsis is about 30 km.`, { dv: leave, stage: stg(`Leave ${the}`) });
     else {
       const P = par(body) === 'Kerbol' ? body : par(body), w = planetWindow(P, 'Kerbin', t0), Xo = exactWindow('Kerbin', P, t0), Xr = Xo ? exactWindow(P, 'Kerbin', Xo.td + Xo.tof + 5 * DAY) : null;
-      S('Return', 'Wait for the window home', Xr ? `Earliest good departure after you arrive: ${tToDate(Xr.td).text}, home ${tToDate(Xr.td + Xr.tof).text} (${fmtN(Xr.tof / DAY)} days). Plan surface time around it.` : `Kerbin must be ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} ${P} around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.`, { when: Xr ? tToDate(Xr.td).text : null, link: 'https://alexmoon.github.io/ksp/', linkText: 'Check in Launch Window Planner' });
+      S('Return', 'Wait for the window home', Xr ? `Earliest good departure after you arrive: ${tToDate(Xr.td).text}, home ${tToDate(Xr.td + Xr.tof).text} (${fmtN(Xr.tof / DAY)} days). Plan surface time around it.` : `Kerbin must be ${deg(w.phase)} ${w.phase >= 0 ? 'ahead of' : 'behind'} ${P} around the Sun; windows come every ${fmtN(w.synodic / DAY)} days.`, { when: Xr ? tToDate(Xr.td).text : null, tool: 'window', pre: { from: P, to: 'Kerbin' }, toolText: 'More windows' });
       S('Return', 'Burn for home', `Burn prograde when your ship is about ${deg(Xr ? Xr.ejection : w.ejection)} from ${P}'s direction of travel, on the side ${(Xr ? Xr.outward : w.outward) ? 'facing away from' : 'facing'} the Sun: about ${fmtN(Xr && P === body ? Xr.ej : leave + dvOf('Transfer to Kerbin'))} m/s. Adjust for a Kerbin periapsis of about 30 km.`, { dv: Xr && P === body ? Xr.ej : leave + dvOf('Transfer to Kerbin'), stage: stg(`Leave ${the}`) });
     }
   }
@@ -1673,6 +1677,156 @@ function buildPlan(R, opt = {}) {
 }
 const api = { exactWindow, stateAt, lambert, buildPlan, stagingOf, moonTransfer, planetWindow, dateToT, tToDate, ORB, RAD, LOW };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PLAN = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Mission calculators, built in (no websites). The same jobs as the tools on the KSP wiki's "Calculation tools" page,
+// written from the orbital mechanics: transfer windows, Δv map, orbit changes, rendezvous, satellite networks with
+// night-time batteries, landing (suicide) burns, aerobraking, and a stage Δv/TWR calculator.
+(function (root) {
+'use strict';
+const O = root.SHIP_OPT || require('./opt.js'), PL = root.SHIP_PLAN || require('./plan.js'), SP = root.SHIP_PARTS || require('./parts.js');
+const G0 = 9.80665, DAY = 21600, MU_SUN = 1.1723328e18, D = Math.PI / 180, BODY = O.BODY, RAD = PL.RAD, LOW = PL.LOW, ORB = PL.ORB;
+const ROT = { Kerbin: 21549, Mun: 138984, Minmus: 40400, Moho: 1210000, Eve: 80500, Gilly: 28255, Duna: 65518, Ike: 65518, Dres: 34800, Jool: 36000, Laythe: 52981, Vall: 105962, Tylo: 211926, Bop: 544507, Pol: 901903, Eeloo: 19460 };
+// atmospheres: top (km); surface density (kg/m³) from the stock surface pressure, temperature and gas; scale height
+// fitted so the air fades out at the top. Kerbin uses the exact stock curve.
+const AIR = { Kerbin: { top: 70 }, Eve: { top: 90, rho0: 6.2, H: 7.2 }, Duna: { top: 50, rho0: 0.15, H: 5.4 }, Jool: { top: 200, rho0: 2.0, H: 20 }, Laythe: { top: 50, rho0: 0.76, H: 4.5 } };
+const BODIES = Object.keys(RAD);
+const mu = b => b === 'Kerbin' ? 3.5316e12 : BODY[b].g * (RAD[b] * 1000) ** 2;
+const par = b => BODY[b].parent || 'Kerbol';
+const R = b => RAD[b] * 1000;
+const soi = b => { const a = ORB[b].a, M = par(b) === 'Kerbol' ? MU_SUN : mu(par(b)); return a * Math.pow(mu(b) / M, 0.4); };
+const vc = (b, r) => Math.sqrt(mu(b) / r);
+const period = (b, a) => 2 * Math.PI * Math.sqrt(a ** 3 / mu(b));
+function rho(b, h) { // h in m
+  const A = AIR[b]; if (!A || h >= A.top * 1000) return 0;
+  if (b === 'Kerbin') return O.kAir(Math.max(0, h)).rho;
+  return A.rho0 * Math.exp(-Math.max(0, h) / (A.H * 1000));
+}
+const info = b => ({ body: b, R: R(b), mu: mu(b), g: BODY[b].g, low: LOW[b], atm: AIR[b] ? AIR[b].top : 0, soi: b === 'Kerbin' || par(b) ? soi(b) : Infinity, rot: ROT[b], parent: par(b) });
+
+// 1. transfer windows: planets by a Lambert solve over the real orbits; moons by Hohmann from low orbit
+function windows(from, to, t0, count = 3) {
+  const out = [];
+  if (par(to) === from) { // a moon of where you are
+    const m = PL.moonTransfer(to), r1 = R(from) + LOW[from] * 1000, a2 = ORB[to].a, at = (r1 + a2) / 2;
+    const v2 = Math.sqrt(mu(from) / a2) - Math.sqrt(mu(from) * (2 / a2 - 1 / at)); // arriving speed relative to the moon
+    const rp = R(to) + LOW[to] * 1000, cap = Math.sqrt(v2 * v2 + 2 * mu(to) / rp) - vc(to, rp);
+    return { moon: true, phase: m.phase, days: m.days, ej: m.dv, cap, every: 1 / Math.abs(1 / period(from, r1) - 1 / period(from, a2)) / DAY };
+  }
+  if (par(from) !== 'Kerbol' || par(to) !== 'Kerbol' || from === to) return { error: 'Pick two planets that orbit the Sun, or a planet and one of its moons.' };
+  let t = t0;
+  for (let k = 0; k < count; k++) { const X = PL.exactWindow(from, to, t); if (!X) break; out.push(X); t = X.td + X.syn * 0.5; }
+  return { list: out };
+}
+// 2. Δv map: from Kerbin's surface to the goal, phase by phase (community Δv map)
+function dvMap(body, mission) {
+  const ph = O.phasesOf(`${body}:${mission}`);
+  return { phases: ph.map(p => ({ name: p.name, dv: p.dv, body: p.body, aero: !!p.chute })), total: ph.reduce((a, p) => a + p.dv, 0), fromLKO: ph.slice(1).reduce((a, p) => a + p.dv, 0) };
+}
+// 3. orbit changes around one body (altitudes in km)
+function hohmann(b, h1, h2) {
+  const r1 = R(b) + h1 * 1000, r2 = R(b) + h2 * 1000, at = (r1 + r2) / 2;
+  const dv1 = Math.abs(Math.sqrt(mu(b) * (2 / r1 - 1 / at)) - vc(b, r1)), dv2 = Math.abs(vc(b, r2) - Math.sqrt(mu(b) * (2 / r2 - 1 / at)));
+  return { dv1, dv2, total: dv1 + dv2, time: Math.PI * Math.sqrt(at ** 3 / mu(b)), raise: h2 > h1 };
+}
+function circularize(b, ap, pe) { // burn at apoapsis to make the orbit round there
+  const ra = R(b) + ap * 1000, rp = R(b) + pe * 1000, a = (ra + rp) / 2;
+  return { dv: vc(b, ra) - Math.sqrt(mu(b) * (2 / ra - 1 / a)), T: period(b, ra) };
+}
+function planeChange(b, h, degs) { const v = vc(b, R(b) + h * 1000); return { dv: 2 * v * Math.sin(degs * D / 2), v }; }
+// 4. rendezvous: phase angle to start the transfer from your orbit to the target's
+function rendezvous(b, hYou, hTgt) {
+  const r1 = R(b) + hYou * 1000, r2 = R(b) + hTgt * 1000, at = (r1 + r2) / 2, tt = Math.PI * Math.sqrt(at ** 3 / mu(b));
+  const n2 = Math.sqrt(mu(b) / r2 ** 3), phase = 180 - n2 * tt / D; // target this far ahead (negative: behind)
+  const syn = 1 / Math.abs(1 / period(b, r1) - 1 / period(b, r2));
+  return { phase, time: tt, syn, h: hohmann(b, hYou, hTgt) };
+}
+// 5. satellite network: resonant release orbit, line-of-sight, night length and battery
+function constellation(b, n, h, draw) {
+  const r = R(b) + h * 1000, T = period(b, r), air = (AIR[b] ? AIR[b].top : 0) * 1000 + R(b);
+  const opts = [];
+  for (const k of [-1, 1]) { // the carrier orbit's period is T·(n±1)/n: it drifts one slot per lap
+    const Tc = T * (n + k) / n, a = Math.cbrt(mu(b) * (Tc / (2 * Math.PI)) ** 2), other = 2 * a - r;
+    if (other < Math.max(air, R(b) + 5000) || other > soi(b) * 0.9) continue;
+    const vAt = Math.sqrt(mu(b) * (2 / r - 1 / a)), dv = Math.abs(vc(b, r) - vAt);
+    opts.push({ Tc, ap: (Math.max(r, other) - R(b)) / 1000, pe: (Math.min(r, other) - R(b)) / 1000, at: k < 0 ? 'apoapsis' : 'periapsis', dv });
+  }
+  const minH = (R(b) / Math.cos(Math.PI / n) - R(b)) / 1000 * 1.05 + (AIR[b] ? AIR[b].top : 0) * (n <= 3 ? 1 : 0.5); // see each other over the horizon
+  const night = T * Math.asin(Math.min(1, R(b) / r)) / Math.PI;
+  return { T, opts, minH: n >= 3 ? minH : null, los: n >= 3 ? h >= minH : null, night, battery: draw * night * 1.2 };
+}
+// 6. landing (suicide) burn: coast, then full thrust retrograde to stop at the ground
+function suicide(b, h, vDown, vSide, thrustKN, massT, isp) {
+  const g = BODY[b].g, F = thrustKN * 1000, m0 = massT * 1000, mdot = F / (isp * G0), dt = 0.05;
+  if (F / (m0 * g) <= 1) return { error: `TWR ${(F / (m0 * g)).toFixed(2)} on ${b}: the engine can't hold the craft up. Needs more than 1.` };
+  const burn = (y, vy, vx, m) => { // vy up-positive; burn retrograde until stopped; returns altitude when stopped
+    let t = 0; while (t < 3600) { const v = Math.hypot(vx, vy); if (v < 0.5 || (vy >= 0 && v < 2)) break; const a = F / m; vx -= a * vx / v * dt; vy += (-a * vy / v - g) * dt; y += vy * dt; m -= mdot * dt; t += dt; if (y < -1e5) break; }
+    return { y, t, m };
+  };
+  const coast = tc => { // fall for tc seconds then burn
+    let y = h, vy = -vDown, t = 0; while (t < tc) { vy -= g * dt; y += vy * dt; t += dt; }
+    return { start: y, vAt: Math.hypot(vSide, vy), r: burn(y, vy, vSide, m0) };
+  };
+  if (burn(h, -vDown, vSide, m0).y < 0) return { late: true, msg: 'Already too low: burn full throttle now.' };
+  let lo = 0, hi = 2 * (vDown + Math.sqrt(vDown * vDown + 2 * g * h)) / g + 1;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (coast(mid).r.y > 0) lo = mid; else hi = mid; }
+  const c = coast(lo);
+  return { wait: lo, startAlt: c.start, speedAt: c.vAt, burnTime: c.r.t, dv: isp * G0 * Math.log(m0 / c.r.m), twr: F / (m0 * g), fuel: (m0 - c.r.m) / 1000 };
+}
+// 7. aerobraking: fly one pass through the air and see what's left
+function aeroPass(b, vInf, apStart, pe, massT, diam, Cd = 1.0) { // vInf m/s (arriving from outside), or apStart km for an orbit already
+  const A = AIR[b]; if (!A) return { error: `${b} has no air.` };
+  const M = mu(b), rp = R(b) + pe * 1000, rTop = R(b) + A.top * 1000 + 1000;
+  let a; if (vInf > 0) a = -M / (vInf * vInf); else a = (R(b) + apStart * 1000 + rp) / 2;
+  const e = 1 - rp / a, p = a * (1 - e * e), nuTop = -Math.acos(Math.max(-1, Math.min(1, (p / rTop - 1) / e)));
+  // state where the path enters the air
+  let x = rTop * Math.cos(nuTop), y = rTop * Math.sin(nuTop);
+  const vk = Math.sqrt(M / p); let vx = -vk * Math.sin(nuTop), vy = vk * (e + Math.cos(nuTop));
+  const CdA = Cd * Math.PI * (diam / 2) ** 2, m = massT * 1000, dt = 0.1;
+  let v0 = Math.hypot(vx, vy), maxG = 0, minR = Infinity, t = 0;
+  // KSP's atmosphere turns with the planet: drag works against speed relative to the air
+  const w = 2 * Math.PI / (ROT[b] || 1e12);
+  while (t < 4000) {
+    const r = Math.hypot(x, y), h = r - R(b); minR = Math.min(minR, r);
+    if (h < 0) return { crash: true, lands: true, pe, maxG };
+    if (r > rTop && x * vx + y * vy > 0) break;
+    const ax0 = -M * x / r ** 3, ay0 = -M * y / r ** 3, ux = vx + w * y, uy = vy - w * x, u = Math.hypot(ux, uy), q = 0.5 * rho(b, h) * u * u, fd = q * CdA / m;
+    const ax = ax0 - fd * ux / (u || 1), ay = ay0 - fd * uy / (u || 1); maxG = Math.max(maxG, fd / G0);
+    vx += ax * dt; vy += ay * dt; x += vx * dt; y += vy * dt; t += dt;
+  }
+  const r = Math.hypot(x, y), v = Math.hypot(vx, vy), en = v * v / 2 - M / r;
+  const out = { lost: v0 - v + 0, maxG, time: t };
+  if (en >= 0) return Object.assign(out, { escaped: true, vOut: Math.sqrt(2 * en) });
+  const a2 = -M / (2 * en), h2 = x * vy - y * vx, e2 = Math.sqrt(Math.max(0, 1 - h2 * h2 / (M * a2)));
+  const pe2 = (a2 * (1 - e2) - R(b)) / 1000;
+  return Object.assign(out, { ap: (a2 * (1 + e2) - R(b)) / 1000, pe2, outside: a2 * (1 + e2) > soi(b), lands: pe2 < 1, skip: pe2 < 1 });
+}
+// the periapsis that leaves you with the apoapsis you want after one pass
+function aeroSolve(b, vInf, apStart, apWant, massT, diam, Cd) {
+  const top = AIR[b].top; let lo = 0.5, hi = top - 0.5, best = null;
+  const f = pe => { const r = aeroPass(b, vInf, apStart, pe, massT, diam, Cd); return r.crash || (r.ap != null && !r.outside && r.pe2 < 0) ? -1 : r.escaped || r.outside ? 1e9 : r.ap; };
+  if (f(hi) < apWant && f(hi) >= 0) return { pe: hi, r: aeroPass(b, vInf, apStart, hi, massT, diam, Cd), shallow: true };
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2, v = f(mid); if (v < 0 || v < apWant) lo = mid; else hi = mid; }
+  best = apWant > 0 ? hi : lo; return { pe: best, r: aeroPass(b, vInf, apStart, best, massT, diam, Cd) };
+}
+// 8. stage Δv and TWR (bottom stage first; each stage's own full and empty mass in tonnes)
+function stages(list, body) {
+  const g = BODY[body].g, gAt = G0; const out = []; let above = 0;
+  for (let i = list.length - 1; i >= 0; i--) { // top stage first, carrying nothing but itself
+    const s = list[i], e = SP.BY[s.eng], n = s.n || 1, full = s.full + above, empty = s.empty + above;
+    if (!e || !(full > empty)) { out.unshift({ dvVac: 0, dvAsl: 0, twr: 0, twrSurf: 0, full }); above = full; continue; }
+    const thrV = e.tv * n, thrA = e.ta * n, ispV = e.iv, ispA = e.ia || e.iv;
+    out.unshift({ dvVac: ispV * gAt * Math.log(full / empty), dvAsl: ispA * gAt * Math.log(full / empty), twr: thrV / (full * g), twrSurf: (body === 'Kerbin' ? thrA : thrV) / (full * g), burn: (full - empty) * 1000 / (thrV * 1000 / (ispV * gAt)), full });
+    above = full;
+  }
+  return { list: out, dvVac: out.reduce((a, s) => a + s.dvVac, 0) };
+}
+const engines = () => SP.PARTS.filter(p => p.cat === 'Engines' && !p.jet && p.tv);
+
+const api = { BODIES, AIR, info, mu, soi, rho, windows, dvMap, hohmann, circularize, planeChange, rendezvous, constellation, suicide, aeroPass, aeroSolve, stages, engines, period };
+if (typeof module !== 'undefined') module.exports = api; else root.SHIP_CALC = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -2018,7 +2172,7 @@ root.SHIP_VIZ = { draw };
 <script>
 (() => {
 'use strict';
-const { PARTS, BY, TECH, BUILD } = window.SHIP_PARTS, O = window.SHIP_OPT, PL = window.SHIP_PLAN;
+const { PARTS, BY, TECH, BUILD } = window.SHIP_PARTS, O = window.SHIP_OPT, PL = window.SHIP_PLAN, C = window.SHIP_CALC;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (x, d = 0) => Number(x).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -2039,9 +2193,9 @@ function addNode(name, set) { const n = TBY[name]; if (!n || set.has(name)) retu
 function dropNode(name, set) { set.delete(name); let ch = true; while (ch) { ch = false; for (const x of [...set]) if (x !== 'Start' && !reqMet(TBY[x], set)) { set.delete(x); ch = true; } } }
 
 // ---- navigation
-function go(v) { st.view = v; save(); for (const k of ['missions', 'new', 'mission', 'career']) $('v-' + k).hidden = k !== v; document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-selected', b.dataset.go === v || (v === 'mission' && b.dataset.go === 'missions'))); $('main').scrollTop = 0; render(); }
+function go(v) { st.view = v; save(); for (const k of ['missions', 'new', 'mission', 'tools', 'career']) $('v-' + k).hidden = k !== v; document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-selected', b.dataset.go === v || (v === 'mission' && b.dataset.go === 'missions'))); $('main').scrollTop = 0; render(); }
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
-function render() { if (st.view === 'missions') renderMissions(); else if (st.view === 'new') renderNew(); else if (st.view === 'mission') renderMission(); else renderCareer(); }
+function render() { if (st.view === 'missions') renderMissions(); else if (st.view === 'new') renderNew(); else if (st.view === 'mission') renderMission(); else if (st.view === 'tools') renderTools(); else renderCareer(); }
 
 // ---- missions list
 const goalName = g => O.goalName(g);
@@ -2174,30 +2328,101 @@ function planHtml(m, steps) {
   const Rm = resultOf(m, m.pick);
   let h = Rm.r.ok ? '' : `<div class="verdict bad"><b>This craft falls short</b>${esc(m.hint || 'See the Craft tab for what is wrong, then design again.')}</div>`;
   h += `<div class="prog"><i style="width:${n ? d / n * 100 : 0}%"></i></div><p class="note" style="margin:0 0 10px">${d} of ${n} steps done. Tap a step when you've done it.</p>`;
-  if (next) h += `<div class="next"><div class="lab">Next · ${esc(next.phase)}</div><b>${esc(next.title)}</b><div>${esc(next.detail)}</div><div class="tags">${next.dv ? `<span class="tag dv">${fmt(next.dv)} m/s</span>` : ''}${next.stage !== undefined && next.stage !== '' ? `<span class="tag st">${typeof next.stage === 'number' ? 'Stage ' + next.stage : esc(next.stage)}</span>` : ''}${next.when ? `<span class="tag">${esc(next.when)}</span>` : ''}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn small" data-step="${next.i}">Done</button>${next.link ? `<button class="btn small" data-url="${esc(next.link)}">${esc(next.linkText || 'Open tool')} ↗</button>` : ''}</div></div>`;
+  if (next) h += `<div class="next"><div class="lab">Next · ${esc(next.phase)}</div><b>${esc(next.title)}</b><div>${esc(next.detail)}</div><div class="tags">${next.dv ? `<span class="tag dv">${fmt(next.dv)} m/s</span>` : ''}${next.stage !== undefined && next.stage !== '' ? `<span class="tag st">${typeof next.stage === 'number' ? 'Stage ' + next.stage : esc(next.stage)}</span>` : ''}${next.when ? `<span class="tag">${esc(next.when)}</span>` : ''}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn small" data-step="${next.i}">Done</button>${next.tool ? `<button class="btn small" data-tool="${next.tool}" data-pre='${esc(JSON.stringify(next.pre || {}))}'>${esc(next.toolText || 'Calculator')}</button>` : ''}</div></div>`;
   else h += `<div class="verdict ok"><b>Mission complete</b>Every step is ticked.</div>`;
   let ph = null;
   for (const s of steps) {
     if (s.phase !== ph) { ph = s.phase; h += `<div class="ph">${esc(ph)}</div>`; }
     h += `<button class="step ${done[s.i] ? 'done' : ''} ${next && s.i === next.i ? 'cur' : ''}" data-step="${s.i}"><span class="bx">${done[s.i] ? '✓' : s.i + 1}</span><span><b>${esc(s.title)}</b><span class="d">${esc(s.detail)}</span><span class="tags">${s.dv ? `<span class="tag dv">${fmt(s.dv)} m/s</span>` : ''}${s.stage !== undefined && s.stage !== '' ? `<span class="tag st">${typeof s.stage === 'number' ? 'Stage ' + s.stage : esc(s.stage)}</span>` : ''}${s.when ? `<span class="tag">${esc(s.when)}</span>` : ''}</span></span></button>`;
   }
-  const planet = steps.some(x => /window/i.test(x.title));
-  const tools = [
-    planet && ['Launch Window Planner', 'https://alexmoon.github.io/ksp/', 'Porkchop plot of every departure date. The plan above uses the same method.'],
-    planet && ['KSP MGA Planner', 'https://krafpy.github.io/KSP-MGA-Planner/', 'Gravity-assist routes (e.g. via Eve) that save Δv on far trips.'],
-    ['KSP Visual Calculator', 'https://ksp-visual-calculator.blaarkies.com/', 'Δv map between any two bodies, and relay coverage.'],
-    ['Resonant orbit calculator', 'https://mjungnickel18.github.io/korc/', 'Spacing satellites evenly in one orbit.'],
-  ].filter(Boolean);
-  h += `<div class="card" style="margin-top:14px"><h3>Fine-tune with the wiki's calculators</h3>${tools.map(t => `<button class="step" data-url="${t[1]}" style="grid-template-columns:minmax(0,1fr)"><span><b>${t[0]} ↗</b><span class="d note">${t[2]}</span></span></button>`).join('')}</div>`;
+  const gi = O.goalInfo(m.goal), Rm2 = Rm.r, mass = Rm2.mass || Rm2.m || 5, planet = steps.some(x => /window/i.test(x.title)), air = !!C.AIR[gi.body];
+  const tl = [planet && ['window', 'Transfer windows', { from: 'Kerbin', to: (O.BODY[gi.body].parent && O.BODY[gi.body].parent !== 'Kerbol') ? O.BODY[gi.body].parent : gi.body }], ['dvmap', 'Δv map', { body: gi.body, mission: gi.mission }], gi.lands && !O.BODY[gi.body].atm && ['suicide', 'Landing burn', { body: gi.body }], air && ['aero', 'Aerobraking', { body: gi.body, mode: 'inf', vinf: 900, want: Math.round(PL.LOW[gi.body] * 4), m: 8 }], ['aero', 'Re-entry at Kerbin', O.BODY[gi.body].parent === 'Kerbin' ? { body: 'Kerbin', mode: 'orbit', ap: gi.body === 'Mun' ? 12000 : 47000, want: 0, m: 3 } : gi.body === 'Kerbin' ? { body: 'Kerbin', mode: 'orbit', ap: 80, want: 0, m: 3 } : { body: 'Kerbin', mode: 'inf', vinf: 1000, want: 0, m: 3 }], ['rdv', 'Rendezvous', { body: gi.body }]].filter(Boolean);
+  h += `<div class="card" style="margin-top:14px"><h3>Calculators for this mission</h3><div class="tlist">${tl.map(t => `<button data-tool="${t[0]}" data-pre='${esc(JSON.stringify(t[2]))}'><b>${t[1]}</b><span>${esc(TOOLS[t[0]].sub)}</span></button>`).join('')}</div></div>`;
   return h + `<button class="btn" data-reset style="margin-top:8px">Start the checklist over</button>`;
 }
+
+// ---- built-in calculators
+const BOD = () => C.BODIES.map(b => [b, b]);
+const TMIS = Object.entries(O.MISSIONS).filter(([k]) => k !== 'station' && k !== 'base').map(([k, v]) => [k, v[0].toUpperCase() + v.slice(1)]);
+const ENG = keep => C.engines().filter(p => allowed(p) || st.tools.all || (keep || []).includes(p.id)).map(p => [p.id, p.t]);
+const kv = rows => `<div class="res">${rows.filter(Boolean).map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('')}</div>`;
+const dur = s => { if (s >= DAYS) return `${fmt(s / DAYS, s < 10 * DAYS ? 1 : 0)} days`; if (s >= 3600) { const mm = Math.round(s / 60); return `${Math.floor(mm / 60)} h ${mm % 60} min`; } if (s >= 60) { const ss = Math.round(s); return `${Math.floor(ss / 60)} min ${ss % 60} s`; } return `${fmt(s, 1)} s`; };
+const DAYS = 21600, ms = x => `${fmt(x)} m/s`, km = x => `${fmt(x, x < 100 ? 1 : 0)} km`;
+const TOOLS = {
+  window: { name: 'Transfer windows', sub: 'When to leave and how much to burn', f: [['from', 'From', 'body', 'Kerbin'], ['to', 'To', 'body', 'Duna'], ['y', 'Today: year', 'num', 1], ['d', 'Today: day', 'num', 1]], run(v) {
+    if (v.y >= 1 && v.d >= 1) { st.date.y = v.y; st.date.d = Math.min(426, v.d); }
+    const t0 = PL.dateToT(st.date.y, st.date.d), W = C.windows(v.from, v.to, t0, 3);
+    if (W.error) return `<p class="warn">${W.error}</p>`;
+    if (W.moon) return kv([['Burn when ' + v.to + ' is ahead of you by', fmt(W.phase) + '°'], ['Transfer burn (from low orbit)', ms(W.ej)], ['Capture to low orbit', ms(W.cap)], ['Trip', dur(W.days * DAYS)], ['Chances come every', dur(W.every * DAYS)]]) + `<p class="note">Hohmann transfer from a ${fmt(PL.LOW[v.from])} km orbit around ${v.from}.</p>`;
+    return W.list.map((X, i) => `<div class="card" style="margin:8px 0 0;padding:10px"><h3>${i ? 'Window ' + (i + 1) : 'Next window'}</h3>` + kv([['Leave', PL.tToDate(X.td).text], ['Arrive', PL.tToDate(X.td + X.tof).text], ['Trip', dur(X.tof)], ['Ejection burn', ms(X.ej)], ['Ejection angle', `${fmt(X.ejection)}° from ${v.from}'s prograde, ${X.outward ? 'sun side away' : 'sun side'}`], Math.abs(X.tilt) > 2 && ['Aim out of plane', `${fmt(Math.abs(X.tilt))}° ${X.tilt > 0 ? 'north (normal)' : 'south (anti-normal)'}`], ['Capture to low orbit (engines)', ms(X.cap)]]) + `</div>`).join('') + `<p class="note">Searched from ${PL.tToDate(t0).text}. Real tilted, stretched orbits, solved for every departure day and trip length; the cheapest is shown.</p>`; } },
+  dvmap: { name: 'Δv map', sub: 'Δv for each leg of a trip', f: [['body', 'Destination', 'body', 'Duna'], ['mission', 'Mission', TMIS, 'landReturn']], run(v) {
+    if (v.body === 'Kerbin') return '<p class="note">Low Kerbin orbit: 3,400 m/s.</p>';
+    const M = C.dvMap(v.body, v.mission);
+    return kv(M.phases.map(p => [p.name + (p.aero ? ' (mostly parachutes)' : ''), ms(p.dv)]).concat([['<b>Total from the pad</b>', '<b>' + ms(M.total) + '</b>'], ['From low Kerbin orbit', ms(M.fromLKO)]])) + '<p class="note">Community Δv map values, with a little margin. Aerobraking can cut capture burns at bodies with air.</p>'; } },
+  orbit: { name: 'Change orbit', sub: 'Raise, lower, circularise, plane change', f: [['body', 'Around', 'body', 'Kerbin'], ['h1', 'Now at (km)', 'num', 80], ['h2', 'Go to (km)', 'num', 250], ['inc', 'Plane change (°)', 'num', 0]], run(v) {
+    const H = C.hohmann(v.body, v.h1, v.h2), P = C.planeChange(v.body, Math.max(v.h1, v.h2), v.inc);
+    return kv([[`Burn 1 at ${km(v.h1)} (${H.raise ? 'prograde' : 'retrograde'})`, ms(H.dv1)], [`Burn 2 at ${km(v.h2)} (${H.raise ? 'prograde' : 'retrograde'})`, ms(H.dv2)], ['Coast between burns', dur(H.time)], v.inc > 0 && [`Plane change at ${km(Math.max(v.h1, v.h2))} (at AN/DN)`, ms(P.dv)], ['Total', ms(H.total + (v.inc > 0 ? P.dv : 0))], ['Orbit time at the end', dur(C.period(v.body, C.info(v.body).R + v.h2 * 1000))]]) + `<p class="note">Do plane changes at the higher altitude: you're slower there, so it's cheaper.</p>`; } },
+  circ: { name: 'Circularise', sub: 'Burn at apoapsis to make the orbit round', f: [['body', 'Around', 'body', 'Kerbin'], ['ap', 'Apoapsis (km)', 'num', 80], ['pe', 'Periapsis now (km)', 'num', 0]], run(v) {
+    const c = C.circularize(v.body, v.ap, v.pe); return kv([['Prograde at apoapsis', ms(c.dv)], ['Orbit time after', dur(c.T)]]); } },
+  rdv: { name: 'Rendezvous', sub: 'Phase angle to catch a target', f: [['body', 'Around', 'body', 'Kerbin'], ['h1', 'Your orbit (km)', 'num', 80], ['h2', 'Target orbit (km)', 'num', 100]], run(v) {
+    const r = C.rendezvous(v.body, v.h1, v.h2);
+    return kv([['Start the burn when the target is', `${fmt(Math.abs(r.phase), 1)}° ${r.phase >= 0 ? 'ahead of' : 'behind'} you`], ['Transfer burn', ms(r.h.dv1)], ['Match speed at the target', ms(r.h.dv2)], ['Coast', dur(r.time)], ['Longest wait for the angle', dur(r.syn)]]) + `<p class="note">Same plane first (match inclination at AN/DN). Close the last few km with target-relative retrograde burns.</p>`; } },
+  sats: { name: 'Satellite network', sub: 'Even spacing, line of sight, batteries', f: [['body', 'Around', 'body', 'Kerbin'], ['n', 'Satellites', 'num', 3], ['h', 'Altitude (km)', 'num', 776], ['ec', 'Power use per satellite (EC/s)', 'num', 0.05]], run(v) {
+    const n = Math.max(2, Math.round(v.n)), c = C.constellation(v.body, n, v.h, v.ec);
+    return kv([['Final orbit time', dur(c.T)], c.minH && ['Lowest altitude for line of sight', km(c.minH)]]) + (c.los === false ? `<p class="warn">Too low: ${n} satellites at ${km(v.h)} can't all see each other over ${v.body}.</p>` : '') +
+      c.opts.map(o => `<div class="card" style="margin:8px 0 0;padding:10px"><h3>Carrier orbit ${o.ap > v.h + 1 ? 'above' : 'below'}</h3>` + kv([['Apoapsis', km(o.ap)], ['Periapsis', km(o.pe)], ['Release one satellite each', o.at], ['Each satellite circularises with', ms(o.dv)], ['Carrier orbit time', dur(o.Tc)]]) + '</div>').join('') +
+      kv([['Longest night', dur(c.night)], ['Battery needed per satellite', `${fmt(c.battery)} EC`]]) + `<p class="note">The carrier's orbit time is ${n - 1}/${n} or ${n + 1}/${n} of the final one, so each lap it drifts one slot. Battery includes 20% spare.</p>`; } },
+  suicide: { name: 'Landing burn', sub: 'When to light the engine to stop at the ground', f: [['body', 'On', 'body', 'Mun'], ['h', 'Height above ground (m)', 'num', 5000], ['vd', 'Falling speed (m/s)', 'num', 50], ['vs', 'Sideways speed (m/s)', 'num', 300], ['eng', 'Engine', 'eng', 'terrier'], ['n', 'Engines', 'num', 1], ['m', 'Lander mass (t)', 'num', 5]], run(v) {
+    const e = BY[v.eng]; if (!e) return '<p class="note">Pick an engine.</p>';
+    const r = C.suicide(v.body, v.h, v.vd, v.vs, e.tv * Math.max(1, v.n), v.m, e.iv);
+    if (r.error) return `<p class="warn">${r.error}</p>`; if (r.late) return `<p class="warn">${r.msg}</p>`;
+    return kv([['Light the engine at', `${fmt(r.startAlt)} m above ground`], ['That is in', dur(r.wait)], ['Speed then', ms(r.speedAt)], ['Burn time (full throttle)', dur(r.burnTime)], ['Δv used', ms(r.dv)], ['Fuel used', `${fmt(r.fuel, 2)} t`], ['TWR on ' + v.body, fmt(r.twr, 2)]]) + `<p class="note">Retrograde, full throttle, no margin: start 10–20% higher than this. Height is above the ground (radar altitude), not sea level.</p>`; } },
+  aero: { name: 'Aerobraking', sub: 'Periapsis to slow down in the air', f: [['body', 'At', 'body', 'Duna'], ['mode', 'Coming from', [['inf', 'Another planet (escape speed)'], ['orbit', 'An orbit (apoapsis)']], 'inf'], ['vinf', 'Speed far away, v∞ (m/s)', 'num', 900], ['ap', 'Apoapsis now (km)', 'num', 12000], ['want', 'Apoapsis wanted after (km, 0 = come down)', 'num', 500], ['m', 'Craft mass (t)', 'num', 8], ['d', 'Craft width (m)', [[0.625, '0.625'], [1.25, '1.25'], [1.875, '1.875'], [2.5, '2.5'], [3.75, '3.75'], [5, '5']], 1.25]], run(v) {
+    if (!C.AIR[v.body]) return `<p class="warn">${v.body} has no air.</p>`;
+    const vi = v.mode === 'inf' ? v.vinf : 0, apS = v.mode === 'inf' ? 0 : v.ap, S = C.aeroSolve(v.body, vi, apS, v.want, v.m, +v.d, 1), r = S.r;
+    const tab = [10, 20, 30, 40, 50, 60, 70, 80].map(f => C.AIR[v.body].top * f / 100).map(pe => { const x = C.aeroPass(v.body, vi, apS, pe, v.m, +v.d, 1); return [km(pe), x.lands ? 'comes down' : x.escaped || x.outside ? 'flies on' : `Ap ${km(x.ap)}, −${ms(x.lost)}`]; });
+    return kv([[v.want > 0 ? 'Set periapsis to' : 'Highest periapsis that still lands', km(S.pe)], r.lands && ['After one pass', r.skip ? `comes down (pops back up to ${km(r.ap)} first)` : 'comes down'], r.ap != null && !r.lands && ['Apoapsis after one pass', km(r.ap)], ['Speed lost', ms(r.lost || 0)], ['Peak braking', `${fmt(r.maxG || 0, 1)} g`]]) + (S.shallow ? '<p class="note">Even the top of the air does it: one gentle pass is enough.</p>' : '') + `<details class="more"><summary>Other periapsis heights</summary>${kv(tab)}</details><p class="note">${v.body === 'Kerbin' ? 'Stock Kerbin air.' : 'Estimated air for ' + v.body + ' (stock top height and surface pressure).'} Blunt end or heat shield first. Drag in KSP depends on the exact shape, so aim a little higher first and lower it on the next pass.</p>`; } },
+  stages: { name: 'Stage Δv & TWR', sub: 'Check a rocket you built yourself', f: [['body', 'TWR on', 'body', 'Kerbin']], run(v) {
+    const L = st.tools.stg = st.tools.stg || [{ eng: 'reliant', n: 1, full: 20, empty: 6 }, { eng: 'terrier', n: 1, full: 5, empty: 1.5 }];
+    const R = C.stages(L, v.body), eo = ENG(L.map(s => s.eng));
+    return L.map((s, i) => `<div class="stg"><b style="grid-column:1/-1">Stage ${L.length - 1 - i}${i === 0 ? ' (bottom)' : i === L.length - 1 ? ' (top)' : ''}</b><label class="f" style="grid-column:1/-1;margin:0">Engine<select data-sg="${i}" data-k="eng">${eo.map(([id, t]) => `<option value="${id}" ${id === s.eng ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label><label class="f" style="margin:0">Engines<input type="number" data-sg="${i}" data-k="n" value="${s.n}"></label><span></span><label class="f" style="margin:0">This stage full (t)<input type="number" step="0.1" data-sg="${i}" data-k="full" value="${s.full}"></label><label class="f" style="margin:0">This stage empty (t)<input type="number" step="0.1" data-sg="${i}" data-k="empty" value="${s.empty}"></label><div style="grid-column:1/-1">${kv([['Δv (vacuum / sea level)', `${ms(R.list[i].dvVac)} / ${ms(R.list[i].dvAsl)}`], [`TWR on ${v.body} at start`, fmt(i === 0 ? R.list[i].twrSurf : R.list[i].twr, 2)], ['Burn time', R.list[i].burn ? dur(R.list[i].burn) : '–']])}</div><button class="btn small" data-sgdel="${i}">Remove</button></div>`).join('') +
+      `<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn small" data-sgadd="0">Add stage below</button><button class="btn small" data-sgadd="1">Add stage on top</button></div>` + kv([['<b>Total Δv (vacuum)</b>', '<b>' + ms(R.dvVac) + '</b>']]) + `<p class="note">Enter each stage's own mass (the VAB's engineer report or KER shows it); stages above are added automatically. Bottom stage TWR uses sea-level thrust on Kerbin.</p>`; } },
+};
+function openTool(id, pre) { st.tools.cur = id; Object.assign(st.tools.v[id] = st.tools.v[id] || {}, pre || {}); save(); go('tools'); }
+function renderTools() {
+  st.tools = st.tools || {}; st.tools.v = st.tools.v || {};
+  const id = st.tools.cur, T = TOOLS[id];
+  if (!T) { $('v-tools').innerHTML = `<div class="card"><h3>Calculators</h3><p class="note" style="margin:0 0 10px">Built in, no internet needed. Missions open these with their numbers filled in.</p><div class="tlist">${Object.entries(TOOLS).map(([k, t]) => `<button data-tl="${k}"><b>${t.name}</b><span>${t.sub}</span></button>`).join('')}</div></div>`; return; }
+  const v = Object.assign({}, Object.fromEntries(T.f.map(f => [f[0], f[3]])), st.tools.v[id] || {});
+  if (id === 'window') { v.y = st.date.y; v.d = st.date.d; }
+  for (const f of T.f) if (f[2] === 'num') v[f[0]] = +v[f[0]] || 0;
+  const field = ([k, lab, type]) => {
+    if (k === 'vinf' && v.mode !== 'inf' || k === 'ap' && id === 'aero' && v.mode !== 'orbit') return '';
+    const opts = type === 'body' ? BOD() : type === 'eng' ? ENG([v[k]]) : Array.isArray(type) ? type : null;
+    if (opts) return `<label class="f">${lab}<select data-tf="${k}">${opts.map(([a, b]) => `<option value="${a}" ${String(a) === String(v[k]) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select></label>`;
+    return `<label class="f">${lab}<input type="number" step="any" data-tf="${k}" value="${v[k]}"></label>`;
+  };
+  let out; try { out = T.run(v); } catch (e) { out = `<p class="warn">Can't work that out: check the numbers.</p>`; }
+  $('v-tools').innerHTML = `<button class="btn small" data-tl="" style="margin-bottom:10px">‹ All calculators</button><div class="card"><h3>${T.name}</h3>${T.f.map(field).join('')}${T.f.some(f => f[2] === 'eng') || id === 'stages' ? `<label class="note" style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><input type="checkbox" data-tall ${st.tools.all ? 'checked' : ''}> Show engines I haven't researched</label>` : ''}</div><div class="card"><h3>Result</h3>${out}</div>`;
+}
+$('v-tools').addEventListener('click', e => {
+  const t = e.target.closest('[data-tl]'); if (t) { st.tools.cur = t.dataset.tl || null; save(); renderTools(); return; }
+  const a = e.target.closest('[data-sgadd]'); if (a) { const s = { eng: 'terrier', n: 1, full: 5, empty: 1.5 }; if (a.dataset.sgadd === '1') st.tools.stg.push(s); else st.tools.stg.unshift({ eng: 'reliant', n: 1, full: 20, empty: 6 }); save(); renderTools(); return; }
+  const d = e.target.closest('[data-sgdel]'); if (d && st.tools.stg.length > 1) { st.tools.stg.splice(+d.dataset.sgdel, 1); save(); renderTools(); }
+});
+$('v-tools').addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.tall !== undefined) { st.tools.all = el.checked; save(); renderTools(); return; }
+  if (el.dataset.sg !== undefined) { const s = st.tools.stg[+el.dataset.sg]; s[el.dataset.k] = el.dataset.k === 'eng' ? el.value : +el.value; save(); renderTools(); return; }
+  if (el.dataset.tf) { const id = st.tools.cur; (st.tools.v[id] = st.tools.v[id] || {})[el.dataset.tf] = el.value; save(); renderTools(); }
+});
 $('v-mission').addEventListener('click', e => {
   const m = st.missions.find(x => x.id === st.open); if (!m) return;
   if (e.target.closest('[data-back]')) { go('missions'); return; }
   if (e.target.closest('[data-del]')) { if (confirm('Delete this mission?')) { st.missions = st.missions.filter(x => x.id !== m.id); save(); go('missions'); } return; }
   const t = e.target.closest('[data-mtab]'); if (t) { st.mtab = t.dataset.mtab; save(); renderMission(); return; }
   const p = e.target.closest('[data-pick]'); if (p) { m.pick = +p.dataset.pick; m.optLabel = OBN[m.opts[m.pick].ob]; m.done = {}; save(); renderMission(); return; }
-  const u = e.target.closest('[data-url]'); if (u) { const url = u.dataset.url; if (AB && AB.openUrl) AB.openUrl(url); else window.open(url, '_blank', 'noopener'); return; }
+  const tb = e.target.closest('[data-tool]'); if (tb) { openTool(tb.dataset.tool, JSON.parse(tb.dataset.pre || '{}')); return; }
   const s = e.target.closest('[data-step]'); if (s) { const i = +s.dataset.step; m.done = m.done || {}; if (m.done[i]) delete m.done[i]; else m.done[i] = 1; save(); const y = $('main').scrollTop; renderMission(); $('main').scrollTop = y; return; }
   if (e.target.closest('[data-reset]')) { m.done = {}; save(); renderMission(); }
 });
@@ -2269,11 +2494,12 @@ $('v-career').addEventListener('change', e => { if (e.target.id === 'upTier' && 
 
 // ---- Android app bridge (self-updating shell)
 const AB = window.AndroidBridge || null;
+st.tools = st.tools || { v: {} };
 window.__appUpdate = (v, n) => { toast(`Update ${v} downloaded${n ? ': ' + n : ''}. Reloading…`, 3000); setTimeout(() => AB && AB.reload(), 1500); };
 window.__appApkUpdate = (url, n) => { if (confirm(`A new version of the app is available${n ? ': ' + n : ''}. Download it?`)) AB && AB.openUrl(url); };
 window.__appUpToDate = v => toast(v < 0 ? "Couldn't reach the update server." : 'You have the latest version.');
 window.__appSaved = (ok, msg) => toast(msg || (ok ? 'Saved.' : 'Not saved.'));
-window.__appBack = () => { if (st.view === 'mission') { go('missions'); return true; } if (st.view !== 'missions') { go('missions'); return true; } return false; };
+window.__appBack = () => { if (st.view === 'tools' && st.tools.cur) { st.tools.cur = null; save(); renderTools(); return true; } if (st.view === 'mission') { go('missions'); return true; } if (st.view !== 'missions') { go('missions'); return true; } return false; };
 if (AB && AB.checkNow) { $('btnUpd').hidden = false; $('btnUpd').onclick = () => { AB.checkNow(); toast('Checking for updates…'); }; }
 go(st.missions.length || st.career.nodes.length > 1 ? (st.view === 'mission' && st.open ? 'mission' : st.view || 'missions') : 'career');
 if (!st.missions.length && st.career.nodes.length <= 1) toast('Start by ticking the tech you have researched.', 4000);
