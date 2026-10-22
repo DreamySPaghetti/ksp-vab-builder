@@ -127,6 +127,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
 .toast { border-radius: 12px; background: rgba(15,20,26,.95); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: toastIn .35s var(--ease) }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px) } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:4px}.checks li.ok{color:var(--good)}.checks li.no{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -616,7 +617,8 @@ function evaluate(g, goal, inv, detail, lim) {
   const notes = [];
   if (!segs.length) notes.push('No engine with fuel.');
   // ---- will it fly straight? steering off the pad, a pointed nose, fins, not too long and thin
-  const stab = [];
+  const stab = [], checks = [];
+  let mark = 0; const chk = name => { checks.push({ name, ok: stab.length === mark }); mark = stab.length; };
   {
     const cmdP = B(g.cmd), finId = Object.keys(g.fix || {}).find(id => B(id).rfin), finLift = finId ? B(finId).lift * g.fix[finId] : 0;
     const ctrlFins = finId && ['avr8', 'deltadeluxe'].includes(finId);
@@ -635,6 +637,52 @@ function evaluate(g, goal, inv, detail, lim) {
     if (g.boost) wid += 2 * (sz(B(g.boost.unit).d) || 1.25);
     if (hgt / Math.max(wid, .6) > 16) stab.push(`Very long and thin (${hgt.toFixed(0)} m tall, ${wid.toFixed(2)} m wide): it will bend and flip. Use wider tanks or struts.`);
   }
+  chk('Steering, nose, fins and proportions for a straight climb');
+  // ---- more rules a real flight has to follow
+  const G = goalInfo(goal), launches = phases[0] && phases[0].k === 'launch';
+  const stW = s0 => Math.max(0, ...s0.tanks.map(t => B(t)).filter(q => q.d !== 'r').map(q => sz(q.d)), s0.eng && B(s0.eng).d !== 'r' ? sz(B(s0.eng).d) : 0);
+  if (launches && perSeg[0]) { // liftoff: engines that work at sea level, and solids that don't hit the thick air too fast
+    const sg = perSeg[0], s0 = g.stages[sg.stage], e = s0 && s0.eng && B(s0.eng);
+    if (e && !e.srb && sg.iasl / sg.ivac < 0.55 && !(sg.boost && g.boost && B(g.boost.unit).srb)) stab.push(`${esc0(e.t)} is a vacuum engine (${sg.iasl.toFixed(0)} s Isp at sea level): it can't lift off. Put a sea-level engine or solid boosters on the bottom.`);
+    chk('Sea-level engine at liftoff');
+    const solidOnly = (e && e.srb && !sg.boost) || (sg.boost && g.boost && B(g.boost.unit).srb && e && e.srb);
+    if (solidOnly && sg.twrAsl > 2.6) stab.push(`Solid boosters give a liftoff thrust-to-weight of ${sg.twrAsl.toFixed(1)} and can't throttle: it will overheat and waste fuel on drag. Aim for 1.3–2.2.`);
+    chk('Liftoff thrust-to-weight you can control');
+  }
+  { // wider stages on top of narrower ones wobble and bend
+    let wTop = sz(B(g.cmd).d), bad = null;
+    g.stages.forEach((s0, i) => { const w = stW(s0); if (w && wTop > w + 0.01 && !bad) bad = { i, wTop, w }; if (w) wTop = w; });
+    if (bad) stab.push(`Stage ${g.stages.length - bad.i} is ${bad.w} m wide under a ${bad.wTop} m part: wide on narrow wobbles. Keep each stage at least as wide as what sits on it.`);
+    chk('Stack gets wider (or stays) going down');
+  }
+  { // fuel the engine can burn
+    const bad = g.stages.find(s0 => s0.eng && !B(s0.eng).srb && s0.tanks.length && (B(s0.eng).fuel === 'LF' ? s0.tanks.every(t => (B(t).ox || 0) > 0) : B(s0.eng).fuel === 'LFO' && s0.tanks.every(t => !(B(t).ox > 0))));
+    if (bad) stab.push(B(bad.eng).fuel === 'LF' ? `${esc0(B(bad.eng).t)} burns liquid fuel only, but its tanks are half oxidizer it can't use. Use LF-only tanks.` : `${esc0(B(bad.eng).t)} needs oxidizer, but its tanks are liquid fuel only.`);
+    chk('Tanks hold the fuel each engine burns');
+  }
+  { // one burn shouldn't take forever: long burns lose Δv and need many passes
+    let worstB = null;
+    for (const sg of perSeg) for (const [k, v] of Object.entries(sg.did)) { if (k === 'Spare' || /^Launch/.test(k) || !sg.dv) continue; const t = sg.burn * v / sg.dv; if (t > 900 && (!worstB || t > worstB.t)) worstB = { k, t }; }
+    if (worstB) stab.push(`“${worstB.k}” would be a ${(worstB.t / 60).toFixed(0)}-minute burn: too long for one pass. Needs more thrust.`);
+    chk('Every burn under 15 minutes');
+  }
+  if (G.lands) { // the landing stage shouldn't tip over
+    const ls = perSeg.find(sg => Object.keys(sg.did).some(k => /^Landing/.test(k)));
+    if (ls) {
+      let h = B(g.cmd).h, w = sz(B(g.cmd).d);
+      for (let i = 0; i <= ls.stage; i++) { const s0 = g.stages[i]; if (s0.dec && i) h += 0.2; for (const t of s0.tanks) if (B(t).d !== 'r') h += B(t).h; if (s0.eng && B(s0.eng).d !== 'r') h += B(s0.eng).h; w = Math.max(w, stW(s0)); }
+      const legs = Object.keys(g.fix || {}).some(id => B(id).leg && !B(id).gear), base = w + (legs ? 1.6 : 0);
+      if (!legs) stab.push(`No landing legs: it will land on the engine bell and tip over.`);
+      else if (h / base > 3) stab.push(`The lander is ${h.toFixed(1)} m tall on a ${base.toFixed(1)} m footprint: it will tip over. Make the landing stage shorter and wider.`);
+    }
+    chk('Lander stands on legs with a wide enough footprint');
+  }
+  if (G.ret || (G.body === 'Kerbin' && G.lands)) {
+    if (!Object.keys(g.fix || {}).some(id => B(id).chute)) stab.push('Coming home needs a parachute.');
+    chk('Parachute for the return');
+    const fast = G.ret && !['Kerbin', 'Mun', 'Minmus'].includes(G.body);
+    if (fast) { if (!Object.keys(g.fix || {}).some(id => B(id).shield)) stab.push('Returning from another planet hits the air at over 3 km/s: needs a heat shield.'); chk('Heat shield for a fast re-entry'); }
+  }
   // solid boosters can't be throttled, shut off or restarted: only good for the first part of the climb
   for (const sg of perSeg) {
     const s0 = g.stages[sg.stage]; if (!s0 || !s0.eng || !B(s0.eng).srb) continue;
@@ -642,6 +690,7 @@ function evaluate(g, goal, inv, detail, lim) {
     if (other > 20) stab.push(`${esc0(B(s0.eng).t)} would have to fly ${Object.keys(sg.did).filter(k => k !== 'Launch to low Kerbin orbit' && k !== 'Spare').join(', ')}, but solid boosters can't throttle or restart.`);
     if (sg.stage === 0 || cumBefore(perSeg, sg) + sg.dv > 2600) stab.push(`${esc0(B(s0.eng).t)} burns into the upper part of the climb; circularising needs a liquid engine.`);
   }
+  chk('Solid boosters only for the first climb');
   const stabPen = stab.length * 2500;
   // decouplers should match what they join; profile fuselages (Mk2/Mk3) belong on planes
   let decSteps = 0, profile = 0;
@@ -675,7 +724,9 @@ function evaluate(g, goal, inv, detail, lim) {
     const reserve = Math.max(150, need * 0.05), made = ok && margin >= reserve;
     score = made ? 1e5 - sizeSteps * 200 + objScore(obj, { cost, parts, mass: total, science }) : score - reserve;
   }
-  const r = { score, margin, ok, fails, lims, stab, need, mass: total, cost, parts, science };
+  checks.push({ name: 'Enough thrust-to-weight for every phase', ok: !fails.length }, { name: 'Enough Δv for every phase', ok: margin >= 0 });
+  if (lim) checks.push({ name: 'Fits your buildings', ok: !lims.length });
+  const r = { score, margin, ok, fails, lims, stab, need, mass: total, cost, parts, science, checks };
   if (detail) Object.assign(r, { st, segs: perSeg, bo, joins, phases, payload, total, used, sizeSteps });
   return r;
 }
@@ -797,7 +848,8 @@ function optimize(inv, goal, opts = {}) {
   if (!C.cmds.length) return { error: 'Add a command pod, cockpit or probe core.' };
   if (!C.engs.length) return { error: 'Add at least one engine.' };
   const fix = fixtures(goal, inv, opts.objective === 'science' ? 'science' : C);
-  const iters = opts.iters || 6000, restarts = opts.restarts || 6;
+  const restarts = opts.restarts || 6, iters = Math.max(opts.iters || 6000, Math.ceil((opts.minTests || 5000) / restarts));
+  let tested = 0;
   if (opts.objective === 'science') C.sci = Object.keys(inv).filter(id => BY[id] && BY[id].sci && inv[id] > 0);
   opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin' });
   // parts you said must be used: the command part is fixed, engines and tanks seed the search, anything else rides along
@@ -825,19 +877,19 @@ function optimize(inv, goal, opts = {}) {
     else if (mTank.length && g.stages[0]) g.stages[0].tanks = mTank.slice();
     if (mSrb) { const d0 = C.decs.find(id => (inv[id] || 0) > 0); if (d0) g.stages.push({ eng: mSrb, n: 1, tanks: [], dec: d0 }); }
     if (!fits(g, inv)) g.stages = [];
-    let cur = evalM(g), curG = g;
-    for (let it = 0; it < iters; it++) {
+    let cur = evalM(g), curG = g; tested++;
+    for (let it = 0, tries = 0; it < iters && tries < iters * 20; tries++) {
       const T = 600 * Math.pow(0.002, it / iters);
       const cand = fixDecs(tidy(mutate(curG, inv, C, r)), inv, C);
       if (!fits(cand, inv)) continue;
-      const e = evalM(cand);
+      const e = evalM(cand); it++; tested++;
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curG = cand; }
       if (!best || cur.score > best.e.score) best = { g: clone(curG), e: cur };
     }
     if (opts.progress) opts.progress((rs + 1) / restarts);
   }
   const d = evalM(best.g, true);
-  return { g: best.g, r: d, goal, unused: unusedOf(best.g, inv) };
+  return { g: best.g, r: d, goal, unused: unusedOf(best.g, inv), tested };
 }
 function unusedOf(g, inv) {
   const u = partsUsed(g), out = {};
@@ -1063,6 +1115,31 @@ function shapePen(d) {
   const ratio = len / Math.max(wid, .6), over = Math.max(0, ratio - 10);
   return { len, wid, ratio, pen: over * 400, note: over > 0 ? `Too long for its width (${len.toFixed(0)} m by ${wid} m): use a wider fuselage instead of more tanks.` : null };
 }
+// how much each wheel can carry (t), roughly from the gear's size class
+const GEAR_CAP = { ly01: 3, ly05: 3, ly10: 6, ly35: 20, ly60: 60 };
+// rules a real plane has to follow besides range: control, gear, landing speed, symmetry, air loads
+function planeRules(d, k, extra = {}) {
+  const checks = [], notes = [], chk = (name, msg) => { checks.push({ name, ok: !msg }); if (msg) notes.push(msg); };
+  const W = d.wings.map(([id, n]) => [BY[id], n]);
+  const pitch = W.filter(([p]) => p.ctrl && !p.fin).reduce((a, [, n]) => a + n, 0), yaw = W.filter(([p]) => p.fin).reduce((a, [, n]) => a + n, 0);
+  chk('Elevons for pitch and roll', pitch < 2 ? 'Needs at least 2 elevons or canards to pitch and roll.' : null);
+  chk('Tail fin for yaw', yaw < 1 ? 'Needs a tail fin to stay pointed straight.' : null);
+  const odd = W.filter(([p, n]) => !p.fin && n % 2 === 1).map(([p]) => p.t);
+  chk('Wings in mirror pairs', odd.length ? `${odd.join(', ')}: an odd number, so one side lifts more and it rolls.` : null);
+  const mLand = k.dry + (extra.cargo || 0) + (k.m - k.dry) * 0.1, cap = (GEAR_CAP[d.gear.id] || 6) * d.gear.n;
+  chk('Landing gear strong enough', mLand * 1.2 > cap || k.m + (extra.cargo || 0) > cap * 1.5 ? `${d.gear.n}× ${BY[d.gear.id].t} carry about ${cap} t; the plane is ${(k.m + (extra.cargo || 0)).toFixed(1)} t. Use more or bigger gear.` : null);
+  const vs = Math.sqrt(2 * mLand * 1000 * 9.81 / (1.225 * k.S * CLMAX)), vMax = extra.rough ? 50 : 75;
+  chk('Lands slowly enough', vs * 1.2 > vMax ? `Lands at about ${(vs * 1.2).toFixed(0)} m/s; ${extra.rough ? 'off a runway' : 'on a runway'} you want under ${vMax}. More wing.` : null);
+  if (extra.maxQ != null) chk('Air loads on the climb (under 80 kPa)', extra.maxQ > 80000 ? `Hits ${(extra.maxQ / 1000).toFixed(0)} kPa of dynamic pressure low down: it will overheat or break up. Climb steeper or use less thrust.` : null);
+  return { checks, notes };
+}
+function fitGear(d, inv, cargo) { // the lightest gear set that can carry it, as on a real plane
+  const k = build(d), m = k.m + (cargo || 0);
+  let best = null;
+  for (const id of Object.keys(GEAR_CAP)) { const have = inv[id] || 0, n = Math.max(3, Math.ceil(m / (GEAR_CAP[id] * 0.8))); if (have < 3) continue; const nn = Math.min(n, have, 8), okk = nn >= n; const w = BY[id].m * nn + (okk ? 0 : 1e3); if (!best || w < best.w) best = { id, n: nn, w }; }
+  if (best) d.gear = { id: best.id, n: best.n };
+  return d;
+}
 function airScore(d, task, lim) {
   const f = airTask(d, task), k = f.build;
   const lims = [];
@@ -1076,10 +1153,14 @@ function airScore(d, task, lim) {
   const sp = shapePen(d), need = f.needKm || 100;
   // past half again the distance needed, more range isn't worth more fuselage
   let sc = -limPen - sp.pen + Math.min(margin, need * 0.5) - k.parts * 2 - k.cost * 0.01 - (f.ok ? 0 : 500);
-  const ok2 = ok && !sp.note;
+  const B0 = BIOMES[task.biome] || {}, pr = planeRules(d, k, { cargo: f.cargo, rough: task.kind !== 'speed' && !task.ret && !B0.runway });
+  sc -= pr.notes.length * 2500;
+  const ok2 = ok && !sp.note && !pr.notes.length;
   const sci = O.scienceOf('Air', d.fix, d.cmd);
   if (lim && lim.objective && lim.objective !== 'margin' && ok2) sc = 1e5 + O.objScore(lim.objective, { cost: k.cost, parts: k.parts, mass: k.m, science: sci });
-  return { score: sc, ok: ok2, margin, lims, fails: [], stab: sp.note ? [sp.note] : [], f, air: true, cost: k.cost, parts: k.parts };
+  const checks = [{ name: 'Takes off within the runway', ok: !!f.takeoff && f.takeoff.run <= 2400 }, { name: 'Not too long for its width', ok: !sp.note }, ...pr.checks, { name: task.kind === 'speed' ? 'Reaches the target speed' : 'Range for the trip with 10% reserve', ok: !!f.ok }];
+  if (lim) checks.push({ name: 'Fits your buildings', ok: !lims.length });
+  return { score: sc, ok: ok2, margin, lims, fails: [], stab: (sp.note ? [sp.note] : []).concat(pr.notes), f, air: true, cost: k.cost, parts: k.parts, checks };
 }
 function score(d, goal, lim) {
   if (lim && lim.task) return airScore(d, lim.task, lim);
@@ -1093,15 +1174,20 @@ function score(d, goal, lim) {
     if (lim.size) { if (len > lim.size[2]) lims.push({ what: 'length', have: len, max: lim.size[2] }); if (wid > lim.size[0]) lims.push({ what: 'width', have: wid, max: lim.size[0] }); }
   }
   const limPen = lims.reduce((a, l) => a + 3000 + 3000 * (l.have - l.max) / l.max, 0);
-  if (!f.ok) return { score: -limPen - 2000 - (f.short || 2000), ok: false, margin: -(f.short || 3400), f, lims, cost: k.cost, parts: k.parts };
+  const pr = planeRules(d, k, { maxQ: f.ok ? f.maxQ : null }), sp0 = shapePen(d);
+  const checks = [{ name: 'Takes off within the runway', ok: !/take off/.test(f.msg || '') }, { name: 'Not too long for its width', ok: !sp0.note }, ...pr.checks, { name: 'Reaches orbit', ok: !!f.ok }];
+  if (lim) checks.push({ name: 'Fits your buildings', ok: !lims.length });
+  if (!f.ok) return { score: -limPen - 2000 - (f.short || 2000) - pr.notes.length * 2500, ok: false, margin: -(f.short || 3400), f, lims, stab: pr.notes, cost: k.cost, parts: k.parts, checks };
   const ph = O.phasesOf(goal).slice(1), need = ph.reduce((a, p) => a + p.dv, 0);
   const R = d.rocket ? BY[d.rocket.id] : BY[d.jet.id], n = d.rocket ? d.rocket.n : d.jet.n;
   const fails = [];
   for (const p of ph) { const g = O.BODY[p.body].g, twr = n * R.tv / (f.mOrbit * g), want = p.k === 'land' ? (p.chute ? 0 : 2) : p.k === 'ascent' ? 1.6 : 0.15; if (twr < want) fails.push({ ph: p.name, twr, need: want }); }
-  const margin = f.dvLeft - need, sp = shapePen(d);
+  const margin = f.dvLeft - need, sp = sp0;
+  checks.push({ name: 'Enough thrust-to-weight for every phase', ok: !fails.length }, { name: 'Enough Δv for the rest of the goal', ok: margin >= 0 });
+  const bad = pr.notes.length;
   const science = O.scienceOf(goal, d.fix, d.cmd);
-  if (lim && lim.objective && lim.objective !== 'margin') { const reserve = Math.max(150, need * 0.05 + 50), okk = margin >= reserve && !fails.length && !lims.length && !sp.note; if (okk) return { score: 1e5 + O.objScore(lim.objective, { cost: k.cost, parts: k.parts, mass: k.m, science }), ok: true, margin, fails, lims, f, science, cost: k.cost, parts: k.parts }; }
-  return { score: -limPen - sp.pen + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length && !sp.note, margin, fails, lims, stab: sp.note ? [sp.note] : [], f, cost: k.cost, parts: k.parts };
+  if (lim && lim.objective && lim.objective !== 'margin') { const reserve = Math.max(150, need * 0.05 + 50), okk = margin >= reserve && !fails.length && !lims.length && !sp.note && !bad; if (okk) return { score: 1e5 + O.objScore(lim.objective, { cost: k.cost, parts: k.parts, mass: k.m, science }), ok: true, margin, fails, lims, f, science, cost: k.cost, parts: k.parts, checks, stab: [] }; }
+  return { score: -limPen - sp.pen - bad * 2500 + margin - (fails.length ? 1500 : 0) - k.parts * 0.5 - k.cost * 1e-4, ok: margin >= 0 && !fails.length && !lims.length && !sp.note && !bad, margin, fails, lims, stab: (sp.note ? [sp.note] : []).concat(pr.notes), f, cost: k.cost, parts: k.parts, checks };
 }
 
 function optimize(inv, goal, opts = {}) {
@@ -1122,22 +1208,30 @@ function optimize(inv, goal, opts = {}) {
   const fitsP = d => Object.entries(used(d)).every(([id, n]) => (inv[id] || 0) >= n);
   const must = (opts.must || []).filter(id => BY[id] && (inv[id] || 0) > 0);
   const scoreM = d => { const e = score(d, goal, opts.limits), u = used(d), miss = must.filter(id => !(u[id] > 0)); if (miss.length) { e.score -= 6000 * miss.length; e.ok = false; e.stab = (e.stab || []).concat(miss.map(id => `Doesn't use ${BY[id].t}, which you marked as must-use.`)); } return e; };
+  const seedWings = () => { // a main wing pair, a pair of elevons and a tail fin, like a real plane
+    const lw = wings.filter(id => !BY[id].ctrl && inv[id] >= 2).sort((a, b) => BY[b].lift - BY[a].lift)[0] || wings[0];
+    const out = [[lw, Math.min(inv[lw], 2)]], el = wings.find(id => BY[id].ctrl && !BY[id].fin && inv[id] >= 2 && id !== lw), fn = wings.find(id => BY[id].fin && id !== lw);
+    if (el) out.push([el, 2]); if (fn) out.push([fn, 1]); return out;
+  };
   let best = null;
-  const iters = opts.iters || 900, restarts = opts.restarts || 5;
+  const restarts = opts.restarts || 5, iters = Math.max(opts.iters || 900, Math.ceil((opts.minTests || 5000) / restarts));
+  const cargo = opts.task && opts.task.kind === 'ferry' ? opts.task.cargo || 0 : 0, mustGear = must.find(id => BY[id].gear);
+  let tested = 0;
   for (let rs = 0; rs < restarts; rs++) {
     const r = O.rng(99 + rs * 31);
     const pick = a => a[Math.floor(r() * a.length)];
     const j0 = jets[rs % jets.length];
     let d = { cmd: cmds[0], tanks: tanks.slice(0, 1), jet: { id: j0, n: Math.min(inv[j0], 2) }, rocket: BY[j0].ta != null || opts.task ? null : (rockets[0] ? { id: rockets[0], n: 1 } : null),
-      intakes: [[intakes[0], Math.min(inv[intakes[0]], 2)]], wings: [[wings[0], Math.min(inv[wings[0]], 2)]], gear, fix: sciFix };
+      intakes: [[intakes[0], Math.min(inv[intakes[0]], 2)]], wings: seedWings(), gear, fix: sciFix };
     if (!fitsP(d)) { d.jet.n = 1; d.intakes[0][1] = 1; d.wings[0][1] = Math.min(inv[wings[0]], 2); }
     for (const id of must) { // seed the must-use parts
       const p = BY[id];
       if (p.cmd) d.cmd = id; else if (p.jet) d.jet = { id, n: Math.min(inv[id], d.jet.n || 1) }; else if (p.ta != null) d.rocket = { id, n: p.d === 'r' ? Math.min(2, inv[id]) : 1 };
       else if (p.cat === 'Fuel tanks' && p.d !== 'r') d.tanks.push(id); else if (p.intake) d.intakes.push([id, 1]); else if (p.wing) d.wings.push([id, Math.min(2, inv[id])]); else if (p.gear) d.gear = { id, n: Math.min(3, inv[id]) }; else d.fix = Object.assign({}, d.fix, { [id]: 1 });
     }
-    let cur = fitsP(d) ? scoreM(d) : { score: -1e9 }, curD = d;
-    for (let it = 0; it < iters; it++) {
+    if (!mustGear) fitGear(d, inv, cargo);
+    let cur = fitsP(d) ? scoreM(d) : { score: -1e9 }, curD = d; tested++;
+    for (let it = 0, tries = 0; it < iters && tries < iters * 20; tries++) {
       const n = JSON.parse(JSON.stringify(curD)), mv = r();
       const u = used(n), av = id => (inv[id] || 0) - (u[id] || 0);
       if (mv < 0.22 && tanks.length) { const t = pick(tanks.filter(x => av(x) > 0)); if (t) n.tanks.push(t); }
@@ -1147,8 +1241,9 @@ function optimize(inv, goal, opts = {}) {
       else if (mv < 0.72) { const id = pick(wings), i = n.wings.findIndex(w => w[0] === id); const step = r() < 0.5 ? 2 : -2; if (i >= 0) { n.wings[i][1] = Math.max(0, n.wings[i][1] + step); if (!n.wings[i][1]) n.wings.splice(i, 1); } else if (step > 0) n.wings.push([id, 2]); }
       else if (mv < 0.86) { const id = pick(intakes), i = n.intakes.findIndex(w => w[0] === id); const step = r() < 0.55 ? 1 : -1; if (i >= 0) { n.intakes[i][1] = Math.max(0, n.intakes[i][1] + step); if (!n.intakes[i][1]) n.intakes.splice(i, 1); } else if (step > 0) n.intakes.push([id, 1]); }
       else if (!must.some(id => BY[id].cmd)) n.cmd = pick(cmds);
+      if (!mustGear) fitGear(n, inv, cargo);
       if (!n.wings.length || !n.intakes.length || !fitsP(n)) continue;
-      const e = scoreM(n), T = 400 * Math.pow(0.003, it / iters);
+      const e = scoreM(n), T = 400 * Math.pow(0.003, it / iters); it++; tested++;
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curD = n; }
       if (!best || cur.score > best.e.score) best = { d: JSON.parse(JSON.stringify(curD)), e: cur };
     }
@@ -1157,7 +1252,7 @@ function optimize(inv, goal, opts = {}) {
   const fin = scoreM(best.d); if (!opts.task) fin.track = fly(best.d, { track: true }).track;
   const u = used(best.d), unused = {};
   for (const [id, n] of Object.entries(inv)) { const left = n - (u[id] || 0); if (left > 0) unused[id] = left; }
-  return { d: best.d, r: fin, goal, unused, plane: true };
+  return { d: best.d, r: fin, goal, unused, plane: true, tested };
 }
 
 const api = { fly, score, optimize, build, air, airTask, BIOMES };
@@ -1629,6 +1724,7 @@ function renderResult() {
   if (!R) { el.innerHTML = html + '<p class="note">Nothing yet.</p>'; return; }
   if (R.error) { el.innerHTML = html + `<div class="verdict bad"><b>Can't build one</b>${esc(R.error)}</div>`; bindSeg(); return; }
   html += R.r && R.r.air ? airHtml(R) : view === 'plane' ? planeHtml(R) : rocketHtml(R);
+  html += checksHtml(R);
   el.innerHTML = html; bindSeg(); draw3d(R); countUp(el);
 }
 // numbers in the result tick up from zero
@@ -1654,6 +1750,11 @@ function airHtml(R) {
     <li>Climb to ${fmt(f.alt / 1000, 1)} km and cruise at ${fmt(f.v)} m/s (Mach ${fmt(f.mach, 2)}), throttled back so thrust matches drag; lift-to-drag about ${fmt(f.LD, 1)}.</li>
     ${t.kind !== 'speed' ? `<li>${t.ret ? `Turn round over ${esc(t.biome)} and fly home` : `Glide down to ${esc(t.biome)} at the end`}: about ${fmt(f.hours * 60)} minutes of fuel in all.</li>` : `<li>Fastest level flight at ${fmt(t.alt / 1000, 1)} km: Mach ${fmt(f.top.M, 2)}.</li>`}</ul></div>`;
   return h + unusedHtml(R.unused) + '<p class="note">Range comes from a cruise model: lift from wing area, drag from the fuselage and induced drag, jet fuel use from each engine\'s Isp, with intake air limits. Real flights vary with piloting and wind-free conditions are assumed.</p>';
+}
+function checksHtml(R) {
+  const c = (R.r && R.r.checks) || []; if (!c.length) return '';
+  const pass = c.filter(x => x.ok).length;
+  return `<div class="card"><h3>Design checks: ${pass} of ${c.length} passed</h3><ul class="checks">${c.map(x => `<li class="${x.ok ? 'ok' : 'no'}">${x.ok ? '✓' : '✗'} ${esc(x.name)}</li>`).join('')}</ul><p class="note">Picked after testing ${fmt(R.tested || 0)} designs.</p></div>`;
 }
 function bindSeg() { document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { view = b.dataset.view; renderResult(); }); }
 function verdict(R, extra) {

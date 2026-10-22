@@ -1,8 +1,8 @@
 {
-  "web": 29,
+  "web": 30,
   "apk": 3,
-  "sha256": "44828ffdc2a81f4d34f8c2c399c0d0ceba3c2b143981692817fd603395c46c35",
-  "notes": "Must-use parts: tap the pin on any part to force the optimizer to use it",
+  "sha256": "210f989bd4714c9879a54d7d39c07ce4339f52b7fca813cd288b4c22e6ce848e",
+  "notes": "Design rules: sea-level engines at liftoff, solid-booster TWR, stack widths, fuel matching, burn length, lander footprint and legs, parachute and heat shield; planes: elevons, tail fin, mirror pairs, gear load, landing speed, max-Q. Every search tests at least 5000 designs; results list the checks.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
