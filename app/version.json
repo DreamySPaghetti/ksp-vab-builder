@@ -1,8 +1,8 @@
 {
-  "web": 36,
+  "web": 37,
   "apk": 3,
-  "sha256": "49e5a860f051820e4ce6c92d9e7256c79b61e088c2b4f174b51af9e55f547013",
-  "notes": "Boosters can't be wider than the core and hang low, engines level with the core's; must-use tanks go in the core stage; stack science parts drawn under the pod.",
+  "sha256": "c8dc416d6fdb0cf9994d9732adf0b5d98409dfec5e7be1046d0e83ca226def38",
+  "notes": "Shuttle: says exactly which parts are missing (and the research node in career) instead of a vague message.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2

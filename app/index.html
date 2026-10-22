@@ -2365,6 +2365,12 @@ async function runStation(onTick) {
   return O.finishStation(meta, res);
 }
 const shuttleOK = () => st.goal === 'Kerbin:orbit';
+// what a shuttle can't do without, in words (and which research node unlocks it, in career)
+function shuttleMissing(U) {
+  const has = f => Object.keys(U).some(id => BY[id] && (U[id] || 0) > 0 && f(BY[id]));
+  const need = [['a cockpit or probe core', p => p.cmd], ['a liquid rocket engine', p => p.ta != null && !p.srb && p.d !== 'r' && p.fuel === 'LFO' && !p.jet], ['fuel tanks', p => p.cat === 'Fuel tanks' && p.ox > 0 && p.d !== 'r'], ['wings', p => p.wing && !p.ctrl], ['elevons', p => p.wing && p.ctrl && !p.fin], ['a tail fin', p => p.fin], ['3 landing gear of one kind', p => p.gear && (U[p.id] || 0) >= 3], ['radial decouplers', p => p.dec && p.radial]];
+  return need.filter(([, f]) => !has(f)).map(([n, f]) => { if (!st.career.on) return n; const lockedOnes = PARTS.filter(p => f(Object.assign({}, p)) && !modOff(p.id) && !unlockedSet().has(p.tech)); const node = lockedOnes.sort((a, b) => (TECH.find(t => t[0] === a.tech) || [0, 99])[1] - (TECH.find(t => t[0] === b.tech) || [0, 99])[1])[0]; return node && st.src === 'auto' ? `${n} (${node.tech})` : n; });
+}
 $('cargo').value = st.cargo || 0;
 $('cargo').onchange = e => { st.cargo = Math.max(0, parseFloat(e.target.value) || 0); e.target.value = st.cargo; save(); };
 let last = { rocket: null, plane: null, shuttle: null, station: null }, view = 'rocket', stLaunch = 0;
@@ -2375,9 +2381,9 @@ $('btnRun').onclick = async () => {
   else {
     if ($('optRocket').checked) kinds.push('rocket');
     if ($('optPlane').checked && hasPlaneParts) kinds.push('plane');
-    if ($('optShuttle').checked && shuttleOK() && Object.keys(U2).some(id => BY[id].wing) && Object.keys(U2).some(id => BY[id].gear)) kinds.push('shuttle');
+    if ($('optShuttle').checked && shuttleOK()) { const miss = shuttleMissing(U2); if (!miss.length) kinds.push('shuttle'); else if (kinds.length) toast(`Skipping the shuttle: ${miss.join(', ')}.`, 4000); else { toast(`A shuttle still needs ${miss.join(', ')}. ${st.src === 'auto' ? (st.career.on ? 'Research them in Career, or tick rockets.' : 'Tick rockets as well.') : 'Add them in Parts, or switch to Any parts (auto).'}`, 6000); return; } }
   }
-  if (!kinds.length) { toast('Tick at least one kind of design (planes and shuttles need wings and landing gear in your parts).'); return; }
+  if (!kinds.length) { toast(isStation() ? 'Pick at least one module.' : 'Tick rockets, spaceplanes or shuttles.'); return; }
   $('btnRun').disabled = true; $('prog').hidden = false; const bar = $('prog').firstElementChild, rk = $('progRk'); bar.style.width = '0'; rk.style.left = '0';
   last = { rocket: null, plane: null, shuttle: null, station: null }; stLaunch = 0;
   const t0 = Date.now(), WT = { rocket: 2, plane: 1, shuttle: 1 }, wsum = kinds.reduce((a, k) => a + (WT[k] || 1), 0);
