@@ -948,7 +948,12 @@ function evaluate(g, goal, inv, detail, lim) {
       const bw = Math.max(sz(B(b.unit).d) || 0, ...b.tanks.map(t => sz(B(t).d))), cw = stW(bs);
       if (bw > cw + 0.01) { stab.push(`The boosters are ${bw} m wide on a ${cw} m core: side boosters can't be wider than the stage they hang on. Use a wider core or narrower boosters.`); break; }
     }
-    chk('Boosters no longer or wider than the core they hang on');
+    { // the boosters have to fit evenly around the core: one ring, or two rings with the same count and size that alternate
+      const cr = stW(bs) / 2, fitN = b => Math.floor(2 * Math.PI * (cr + (sz(B(b.unit).d) || 1.25) / 2) / ((sz(B(b.unit).d) || 1.25) * 1.05));
+      if (rgs.length === 2 && (rgs[0].k !== rgs[1].k || (sz(B(rgs[0].unit).d) || 1.25) !== (sz(B(rgs[1].unit).d) || 1.25))) stab.push(`Two booster rings of ${rgs[0].k} and ${rgs[1].k}: they can't sit evenly around the core together, so the rocket pulls to one side. Use the same number and size in both rings so they alternate.`);
+      else { const tot = rgs.reduce((a, b) => a + b.k, 0), room = fitN(rgs[0]); if (tot > room) stab.push(`${tot} boosters don't fit around a ${stW(bs)} m core (room for about ${room}): they'd overlap. Use fewer or a wider core.`); }
+    }
+    chk('Boosters no longer or wider than the core they hang on, evenly spaced');
   }
   if (rgs.some(b => b.cross)) { // asparagus: crossfeed only between liquid rocket engines that burn the same fuel as the core
     const bad = rgs.find(b => b.cross && (BY[b.unit].srb || BY[b.unit].fuel !== 'LFO')) || (g.stages.length && g.stages[g.stages.length - 1].eng && BY[g.stages[g.stages.length - 1].eng].fuel !== 'LFO' ? rgs.find(b => b.cross) : null);
@@ -1076,9 +1081,10 @@ function mutate(g, inv, C, r) {
       const unit = pickA(C.engs.filter(id => BY[id].srb || BY[id].d !== 'r')), dec = pickA(C.rdecs);
       if (unit && dec) {
         const used2 = RG.reduce((a, b) => a + b.k, 0), ks = [2, 3, 4, 6, 8].filter(k => avail(unit) >= k && avail(dec) >= k && used2 + k <= 12);
-        if (ks.length) { const nb = { k: ks[Math.floor(r() * ks.length)], unit, tanks: [], dec, cone: null, cross: false }; if (r() < 0.5) RG.unshift(nb); else RG.push(nb); }
+        const k0 = RG.length ? RG[0].k : ks[Math.floor(r() * ks.length)];
+        if (ks.includes(k0)) { const nb = { k: k0, unit, tanks: [], dec, cone: null, cross: false }; if (r() < 0.5) RG.unshift(nb); else RG.push(nb); }
       }
-    } else if (RG.length) { const b = RG[Math.floor(r() * RG.length)]; const ks = [2, 3, 4, 6, 8].filter(k => k !== b.k && avail(b.unit) + b.k >= k && avail(b.dec) + b.k >= k); if (ks.length) b.k = ks[Math.floor(r() * ks.length)]; }
+    } else if (RG.length) { const b = RG[0]; const ks = [2, 3, 4, 6, 8].filter(k => k !== b.k && RG.every(x => avail(x.unit) + x.k >= k && avail(x.dec) + x.k >= k)); if (ks.length) { const k = ks[Math.floor(r() * ks.length)]; RG.forEach(x => { x.k = k; }); } }
     if (!RG.length) delete n.rings;
   }
   else if (mv < 0.9 && ringsOf(n).some(b => !BY[b.unit].srb)) { // tanks on liquid boosters, or crossfeed on/off
@@ -2059,7 +2065,7 @@ function rocket(g, M, R) {
     if (i === d.stages.length - 1) { const RG = d.rings || (d.boost ? [d.boost] : []); RG.forEach((b, ri) => {
       const u = B(b.unit), br = rad(u.d === 'r' ? 0.625 : u.d), off = tr + br + .12 + ri * 0.05;
       for (let k = 0; k < b.k; k++) {
-        const a = k / b.k * Math.PI * 2 + Math.PI / b.k + ri * Math.PI / (b.k * 2), sub = new THREE.Group(); g.add(sub);
+        const a = k / b.k * Math.PI * 2 + Math.PI / b.k + ri * Math.PI / b.k, sub = new THREE.Group(); g.add(sub);
         const blen = b.tanks.reduce((q, t) => q + B(t).h, 0) + u.h * 0.9; // hung low: booster engines level with the core's
         let by = Math.min(tankTop - .3, y + blen);
         if (b.cone) { nose(sub, M, br, by, br * 2); }

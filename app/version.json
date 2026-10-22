@@ -1,8 +1,8 @@
 {
-  "web": 40,
+  "web": 41,
   "apk": 3,
-  "sha256": "df6a3d2d85fb487987baf1ba4fabdb4e3682bb45b97d42c08e6f248bcb137451",
-  "notes": "Redesign after R&D: opens on the goal and uses every unlocked part by default; crewed by default for landings; player-style rules (adapters, rocket tanks only, lifter drops in orbit); 'Best balance' replaces 'Most \u0394v'; three options to pick from; VAB build steps and the staging stack as KSP shows it.",
+  "sha256": "bc7a6986c74a9f269863ad2df88ff5276b5496f285cd5fb79ce730bcbbb620d5",
+  "notes": "Boosters must sit evenly around the core: one ring, or two rings with the same count and size that alternate; no more than fit around the core.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
