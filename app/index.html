@@ -128,6 +128,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px) } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
 .ker{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}.ker th,.ker td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line)}.ker th:first-child,.ker td:first-child{text-align:left}.ker th{color:var(--muted);font-weight:500}.ker .tot td{font-weight:600;border-bottom:0}
+.chip{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:999px;padding:6px 10px;font-size:13px}
 .checks{list-style:none;margin:0;padding:0;display:grid;gap:4px}.checks li.ok{color:var(--good)}.checks li.no{color:var(--bad)}
 </style>
 </head>
@@ -152,6 +153,7 @@ input:focus, select:focus { outline: 0; border-color: #f4b63a; box-shadow: 0 0 0
         <div class="seg" role="group" aria-label="Parts to use" style="margin-top:12px"><button type="button" data-src="mine">My parts</button><button type="button" data-src="auto">Any parts (auto)</button></div>
         <label class="ck"><span style="min-width:120px">Best means</span><select id="objective" style="width:auto"><option value="margin">Most Δv to spare</option><option value="cheap">Cheapest that makes it</option><option value="light">Lightest that makes it</option><option value="parts">Fewest parts</option><option value="science">Most science</option></select></label>
         <p class="note" id="srcNote" style="margin:6px 0 0"></p>
+        <div id="mustBox" style="margin-top:10px"></div>
         <label class="ck"><input type="checkbox" id="optRocket" checked> <span>Try rockets (stacked stages, boosters)</span></label>
         <label class="ck"><input type="checkbox" id="optPlane" checked> <span>Try spaceplanes (runway takeoff, jets, then rockets)</span></label>
         <label class="ck"><span style="min-width:120px">Search effort</span><select id="effort" style="width:auto"><option value="1">Quick</option><option value="2" selected>Normal</option><option value="4">Thorough</option></select></label>
@@ -1021,6 +1023,12 @@ function optimize(inv, goal, opts = {}) {
     const mEng = must.filter(id => BY[id].ta != null && !BY[id].srb), mSrb = must.find(id => BY[id].srb), mTank = must.filter(id => BY[id].cat === 'Fuel tanks'), mDec = must.filter(id => BY[id].dec && !BY[id].radial);
     if (mEng.length) g.stages = mEng.map((e, i) => ({ eng: e, n: BY[e].d === 'r' ? Math.min(4, inv[e]) : 1, tanks: i === 0 ? mTank.slice() : [], dec: i ? (mDec[i - 1] || C.decs[0] || null) : null }));
     else if (mTank.length && g.stages[0]) g.stages[0].tanks = mTank.slice();
+    if (mEng.length) { // give must-use engines tanks they can burn, and a sea-level stage under a vacuum engine
+      const tankFor = e => C.tanks.filter(t => (BY[e].fuel === 'LF' ? !(BY[t].ox > 0) : BY[t].ox > 0) && (BY[e].d === 'r' || BY[t].d === BY[e].d)).sort((a, b) => BY[b].m - BY[a].m)[0] || C.tanks.find(t => BY[e].fuel === 'LF' ? !(BY[t].ox > 0) : BY[t].ox > 0);
+      for (const st0 of g.stages) if (!st0.tanks.length) { const t = tankFor(st0.eng); if (t) st0.tanks.push(t, t); }
+      const bot = g.stages[g.stages.length - 1], be = BY[bot.eng];
+      if (be.ia / be.iv < 0.55 && !mSrb) { const lo = C.engs.filter(id => !BY[id].srb && BY[id].ia / BY[id].iv >= 0.7 && BY[id].d !== 'r').sort((a, b) => BY[b].ta - BY[a].ta)[rs % 3] || C.engs.find(id => BY[id].srb); const d0 = C.decs[0]; if (lo && d0) { const t = tankFor(lo); g.stages.push({ eng: lo, n: 1, tanks: t ? [t, t, t] : [], dec: d0 }); } }
+    }
     if (mSrb) { const d0 = C.decs.find(id => (inv[id] || 0) > 0); if (d0) g.stages.push({ eng: mSrb, n: 1, tanks: [], dec: d0 }); }
     if (!fits(g, inv)) g.stages = [];
     let cur = evalM(g), curG = g; tested++;
@@ -1152,7 +1160,7 @@ function planStation(inv0, goal, opts = {}) {
     for (let i = 0; i < pkgs.length; i++) {
       const base = opts.auto ? Object.assign({}, invS) : invL, invP = Object.assign({}, base);
       for (const [id, n] of Object.entries(pkgs[i].fix)) invP[id] = (invP[id] || 0) + n;
-      const R2 = optimize(invP, orbitGoal, { iters: quick ? 400 : opts.iters, restarts: quick ? 4 : opts.restarts, minTests: quick ? 1600 : 5000, limits: Object.assign({}, opts.limits || {}, { extraDv: i ? (isBase ? 80 : 150) : 0 }), objective: opts.objective, station: { fix: pkgs[i].fix }, progress: opts.progress && !quick ? p => opts.progress((i + p) / pkgs.length) : null });
+      const R2 = optimize(invP, orbitGoal, { iters: quick ? 400 : opts.iters, restarts: quick ? 4 : opts.restarts, minTests: quick ? 1600 : 5000, limits: Object.assign({}, opts.limits || {}, { extraDv: i ? (isBase ? 80 : 150) : 0 }), objective: opts.objective, station: { fix: pkgs[i].fix }, must: i === 0 ? (opts.must || []).filter(id => !BY[id].stn) : [], progress: opts.progress && !quick ? p => opts.progress((i + p) / pkgs.length) : null });
       if (R2.error) return { error: R2.error };
       tested += R2.tested || 0;
       if (!opts.auto) { const u = partsUsed(R2.g); for (const [id, n] of Object.entries(u)) if (!(id in pkgs[i].fix)) invL[id] = (invL[id] || 0) - n; }
@@ -1893,10 +1901,29 @@ const usable = () => {
   if (st.src !== 'auto') return mine;
   const inv = O.autoInventory(p => !locked(p.id));
   for (const [id, n] of Object.entries(mine)) if (BY[id].sci || st.must.includes(id)) inv[id] = Math.max(inv[id] || 0, n); // your science parts and must-use parts still come along
+  for (const id of st.must) if (BY[id] && !locked(id)) inv[id] = Math.max(inv[id] || 0, st.inv[id] || 1, BY[id].d === 'r' && (BY[id].ta != null || BY[id].leg) ? 4 : 1);
   if (st.objective === 'science') for (const p of PARTS) if (p.sci && !locked(p.id) && !inv[p.id]) inv[p.id] = p.id === 'goo' || p.id === 'scijr' ? 4 : 1; // offer every experiment
   return inv;
 };
+// must-use parts, set right here on the Goal tab (the 📌 on the Parts tab does the same)
+function renderMust() {
+  const q = (st.mustQ || '').trim().toLowerCase(), live = st.must.filter(id => BY[id] && !locked(id));
+  const hits = q ? PARTS.filter(p => !locked(p.id) && !st.must.includes(p.id) && p.t.toLowerCase().includes(q)).slice(0, 6) : [];
+  $('mustBox').innerHTML = `<div class="ck" style="margin:0 0 6px"><span style="min-width:120px">Must use</span><span class="note">${st.src === 'auto' ? 'The auto builder starts from these and won\'t leave them out.' : 'The optimizer won\'t leave these out.'}</span></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${live.map(id => `<button type="button" class="chip" data-mustdel="${id}" aria-label="Stop requiring ${esc(BY[id].t)}">📌 ${esc(BY[id].t)} ✕</button>`).join('') || '<span class="note">Nothing pinned.</span>'}</div>
+    <input id="mustQ" placeholder="Add a part: type its name (e.g. Nerv, Mastodon, Hitchhiker)" value="${esc(st.mustQ || '')}" autocomplete="off" style="width:100%;margin-top:8px;padding:9px;border-radius:8px;border:1px solid var(--line);background:rgba(8,12,16,.7);color:var(--ink)">
+    ${hits.length ? `<div style="display:grid;gap:4px;margin-top:6px">${hits.map(p => `<button type="button" class="btn" data-mustadd="${p.id}" style="text-align:left">+ ${esc(p.t)} <span class="note">${esc(p.cat)}</span></button>`).join('')}</div>` : q ? '<p class="note" style="margin:6px 0 0">No unlocked part matches.</p>' : ''}`;
+}
+$('mustBox').addEventListener('click', e => {
+  const a = e.target.closest('[data-mustadd]'), d = e.target.closest('[data-mustdel]');
+  if (a) { const id = a.dataset.mustadd; if (!st.must.includes(id)) st.must = st.must.concat(id); if (st.src !== 'auto' && !(st.inv[id] > 0)) st.inv[id] = 1; st.mustQ = ''; toast(`${BY[id].t} must be used.`, 1600); }
+  else if (d) { st.must = st.must.filter(x => x !== d.dataset.mustdel); }
+  else return;
+  save(); renderMust();
+});
+$('mustBox').addEventListener('input', e => { if (e.target.id !== 'mustQ') return; st.mustQ = e.target.value; const pos = e.target.selectionStart; renderMust(); const i = $('mustQ'); i.focus(); i.setSelectionRange(pos, pos); });
 function renderSrc() {
+  renderMust();
   document.querySelectorAll('[data-src]').forEach(b => b.setAttribute('aria-pressed', b.dataset.src === st.src));
   if (!st.objective) st.objective = st.src === 'auto' ? 'cheap' : 'margin';
   $('objective').value = st.objective;
@@ -1931,7 +1958,7 @@ $('plist').addEventListener('change', e => { const i = e.target.closest('input[d
 // ---- tabs
 function moveInd() { const b = document.querySelector('[data-tab][aria-selected=true]'), i = $('navInd'); if (b && i) { i.style.left = (b.offsetLeft + b.offsetWidth * .18) + 'px'; i.style.width = (b.offsetWidth * .64) + 'px'; } }
 function enter(id) { const el = $(id); el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); clearTimeout(enter.t); enter.t = setTimeout(() => el.classList.remove('enter'), 900); }
-function setTab(t) { const changed = st.tab !== t; if (changed) document.querySelector('main').scrollTop = 0; st.tab = t; requestAnimationFrame(moveInd); if (changed) setTimeout(() => enter('tab-' + t)); document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'parts') { if (!document.querySelector('#cats [aria-pressed=true]') || (st.cat !== 'All' && !PARTS.some(p => p.cat === st.cat && !locked(p.id)))) st.cat = 'All'; renderCats(); renderList(); } }
+function setTab(t) { const changed = st.tab !== t; if (changed) document.querySelector('main').scrollTop = 0; st.tab = t; requestAnimationFrame(moveInd); if (changed) setTimeout(() => enter('tab-' + t)); document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t)); ['parts', 'career', 'goal', 'result'].forEach(k => $('tab-' + k).hidden = k !== t); save(); if (t === 'result') resize3d(); if (t === 'career') renderCareer(); if (t === 'goal') renderMust(); if (t === 'parts') { if (!document.querySelector('#cats [aria-pressed=true]') || (st.cat !== 'All' && !PARTS.some(p => p.cat === st.cat && !locked(p.id)))) st.cat = 'All'; renderCats(); renderList(); } }
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 // ---- goal tab
 // goal: any stock body, and what to do there
@@ -2002,7 +2029,7 @@ function makeWorker() {
   try {
     const code = [...document.querySelectorAll('script:not([src])')].slice(0, 3).map(s => s.textContent).join('\n') +
       `\nself.onmessage = e => { const { kind, inv, goal, eff, limits, objective, task, must, stn, auto } = e.data; const prog = p => self.postMessage({ prog: p, kind });
-       try { const r = kind === 'station' ? self.SHIP_OPT.planStation(inv, goal, { modules: stn.mods, crew: stn.crew, auto, iters: 1000 * eff, restarts: 5, progress: prog, limits, objective }) : kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective, task, must }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective, must }); self.postMessage({ done: r, kind }); }
+       try { const r = kind === 'station' ? self.SHIP_OPT.planStation(inv, goal, { modules: stn.mods, crew: stn.crew, auto, must, iters: 1000 * eff, restarts: 5, progress: prog, limits, objective }) : kind === 'plane' ? self.SHIP_PLANE.optimize(inv, goal, { iters: 700 * eff, restarts: 3 + eff, progress: prog, limits, objective, task, must }) : self.SHIP_OPT.optimize(inv, goal, { iters: 3500 * eff, restarts: 4 + eff, progress: prog, limits, objective, must }); self.postMessage({ done: r, kind }); }
        catch (err) { self.postMessage({ done: { error: err.message }, kind }); } };`;
     return new Worker(URL.createObjectURL(new Blob([code.replace(/typeof window !== 'undefined' \? window : globalThis/g, 'self')], { type: 'text/javascript' })));
   } catch (e) { return null; }
@@ -2014,7 +2041,7 @@ function runKind(kind, eff, onProg) {
     if (worker) {
       const h = e => { if (e.data.kind !== kind) return; if (e.data.prog != null) onProg(e.data.prog); if (e.data.done) { worker.removeEventListener('message', h); res(e.data.done); } };
       worker.addEventListener('message', h); worker.postMessage({ kind, inv: usable(), goal: st.goal, eff: st.src === 'auto' ? eff + 1 : eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must.filter(id => !locked(id)), stn: stnSel(), auto: st.src === 'auto' });
-    } else setTimeout(() => res(kind === 'station' ? O.planStation(usable(), st.goal, { modules: stnSel().mods, crew: st.stn.crew, auto: st.src === 'auto', iters: 1000 * eff, restarts: 5, limits: limitsFor('rocket'), objective: st.objective }) : kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
+    } else setTimeout(() => res(kind === 'station' ? O.planStation(usable(), st.goal, { modules: stnSel().mods, crew: st.stn.crew, must: st.must.filter(id => !locked(id)), auto: st.src === 'auto', iters: 1000 * eff, restarts: 5, limits: limitsFor('rocket'), objective: st.objective }) : kind === 'plane' ? window.SHIP_PLANE.optimize(usable(), st.goal, { iters: 700 * eff, restarts: 3 + eff, limits: limitsFor(kind), objective: st.objective, task: isAir() ? airTask() : null, must: st.must }) : O.optimize(usable(), st.goal, { iters: 3500 * eff, restarts: 4 + eff, limits: limitsFor(kind), objective: st.objective, must: st.must })), 30);
   });
 }
 $('btnRun').onclick = async () => {
