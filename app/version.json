@@ -1,8 +1,8 @@
 {
-  "web": 34,
+  "web": 35,
   "apk": 3,
-  "sha256": "2aba2b6b2cc1f4b5ef90465662a1e8ca6d9a12c2964bd6548e442045af375834",
-  "notes": "Fix: 3D picture was blank for rockets with side-mounted tanks. New structure rules: parts can't hold more than their size allows, no more than two tank sizes per stage.",
+  "sha256": "56ecbbc9872194bb5be2df161bf8d4de84688c31a89af2a1b7e6e5774dd66dc3",
+  "notes": "Every run tests at least 500,000 designs on all cores; no effort setting. Rockets grow sideways: two booster rings, asparagus crossfeed, separate Apollo-style landers. New shuttle (STS) designs. Cargo to carry. Tighter rules: leg strength, parachute capacity, heat shield size, booster length, simple wings.",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
