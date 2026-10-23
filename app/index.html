@@ -1153,6 +1153,16 @@ function seedStages(g, goal, C, inv, variant) {
   if (stages.length) stages[0].dec = null;
   return { stages, rings: [] };
 }
+// a cross of two rockets: the upper stages of one on the lower stages of the other, with either one's strap-on boosters
+function cross(a, b, r) {
+  const A = a.stages || [], B = b.stages || [];
+  if (!A.length || !B.length) return clone(A.length ? a : b);
+  const cut = 1 + Math.floor(r() * Math.max(1, Math.min(A.length, B.length + 1) - 0)), top = A.slice(0, Math.min(cut, A.length)), bot = B.slice(Math.min(cut, B.length));
+  const h = clone(a); h.stages = clone(top.concat(bot)); if (!h.stages.length) h.stages = clone(A);
+  h.rings = clone(r() < 0.5 ? (a.rings || []) : (b.rings || [])); if (!h.rings.length) delete h.rings;
+  if (h.stages.length > 4) h.stages.length = 4;
+  return h;
+}
 function optimize(inv, goal, opts = {}) {
   const C = catalog(inv);
   if (!C.cmds.length) return { error: 'Add a command pod, cockpit or probe core.' };
@@ -1180,7 +1190,7 @@ function optimize(inv, goal, opts = {}) {
     return e;
   };
   let best = null;
-  const lightCmd = C.cmds.slice().sort((a, b) => BY[a].m - BY[b].m);
+  const lightCmd = C.cmds.slice().sort((a, b) => BY[a].m - BY[b].m), elite = [];
   for (let rs = 0; rs < restarts; rs++) {
     const r = rng((opts.seed || 1234) + rs * 7919);
     let g = { cmd: goalInfo(goal).ret ? (lightCmd.find(id => !BY[id].probe && !BY[id].plane) || lightCmd[0]) : lightCmd[rs % lightCmd.length], fix: Object.assign({}, fix), stages: [], boost: null };
@@ -1205,10 +1215,17 @@ function optimize(inv, goal, opts = {}) {
     }
     if (mSrb) { const d0 = C.decs.find(id => (inv[id] || 0) > 0); if (d0) g.stages.push({ eng: mSrb, n: 1, tanks: [], dec: d0 }); }
     if (!fits(g, inv)) g.stages = [];
+    // other starting points: a design you saved before or the network's guess (opts.seeds), or a cross of two good designs from earlier restarts
+    const adopt = s => { const h = clone(s); h.fix = Object.assign({}, fix); if (!C.cmds.includes(h.cmd)) h.cmd = g.cmd; if (mustCmd) h.cmd = mustCmd; h.stages = (h.stages || []).filter(x => BY[x.eng] && (inv[x.eng] || 0) > 0).map(x => Object.assign(x, { tanks: (x.tanks || []).filter(t => (inv[t] || 0) > 0), dec: x.dec && (inv[x.dec] || 0) > 0 ? x.dec : (C.decs[0] || null) })); h.rings = (h.rings || []).filter(r0 => BY[r0.unit] && (inv[r0.unit] || 0) > 0 && r0.dec && (inv[r0.dec] || 0) > 0); if (!h.rings.length) delete h.rings; if (!h.stages.length) return null; const f = fixDecs(tidy(h), inv, C); return fits(f, inv) ? f : null; };
+    const seeds = opts.seeds || [];
+    let alt = null;
+    if (seeds.length && rs % 3 === 1) alt = adopt(seeds[((rs - 1) / 3 | 0) % seeds.length]);
+    else if (opts.crossStart && elite.length >= 2 && rs % 3 === 2) { const a = elite[Math.floor(r() * elite.length)].g, b = elite[Math.floor(r() * elite.length)].g; alt = adopt(cross(a, b, r)); }
+    const warm = !!(alt && !mEng.length); if (warm) g = alt; // a good start is annealed cooler so it isn't shaken apart
     let cur = evalM(g), curG = g; tested++;
     for (let it = 0, tries = 0; it < iters && tries < iters * 20; tries++) {
-      const T = 600 * Math.pow(0.002, it / iters);
-      const cand = fixDecs(tidy(mutate(curG, inv, C, r)), inv, C);
+      const T = (warm ? 60 : 600) * Math.pow(0.002, it / iters);
+      const cand = fixDecs(tidy(!opts.noCross && !opts.noCrossMove && elite.length && r() < 0.02 ? cross(r() < 0.5 ? curG : elite[Math.floor(r() * elite.length)].g, r() < 0.5 ? elite[Math.floor(r() * elite.length)].g : curG, r) : mutate(curG, inv, C, r)), inv, C);
       if (!fits(cand, inv)) continue;
       const e = evalM(cand); it++; tested++;
       if (e.ok) for (const ob of ALT_OBJ) { if (e.margin < Math.max(150, e.need * (ob === 'balance' ? 0.10 : 0.05))) continue; const sc = objScore(ob, e); if (!alts[ob] || sc > alts[ob].s) alts[ob] = { s: sc, g: clone(cand) }; } // best seen for each kind of "best"
@@ -1217,6 +1234,7 @@ function optimize(inv, goal, opts = {}) {
       if (!best || cur.score > best.e.score) best = { g: clone(curG), e: cur };
     }
     if (opts.progress) opts.progress((rs + 1) / restarts);
+    { const fin = { g: clone(curG), s: cur.score }; elite.push(fin); elite.sort((p, q) => q.s - p.s); if (elite.length > 6) elite.pop(); } // what this restart ended on joins the pool crosses are bred from
   }
   const d = evalM(best.g, true);
   return { g: best.g, r: d, goal, unused: unusedOf(best.g, inv), tested, alts };
@@ -1531,7 +1549,7 @@ function finishStation(M, res) {
   return { station: true, base: isBase, kasJoin: M.kasJoin, hub: M.hub, portType: M.pt, goal, body, orbit: orb, launches: res.map((x, i) => Object.assign(x, { pkg: M.pkgs[i] })), port: Object.keys(M.pkgs[0].fix).find(id => BY[id].stn === 'port') || null, power: { load, gen, bat, needGen, needBat }, crew: capacity, notes, tested,
     r: { ok, checks, margin: Math.min(...res.map(x => x.r.margin)), cost: sum('cost'), parts: sum('parts'), mass: sum('mass'), stab: notes } };
 }
-const api = { bodyAir, BODY_AIR, seedStages, kAir, finishStation, evaluateShuttle, optimizeShuttle, shParts, ringsOf, planStation, stationOrbit, baseSite, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, rng, G0, KG, U, usableProp };
+const api = { bodyAir, BODY_AIR, seedStages, kAir, finishStation, evaluateShuttle, optimizeShuttle, shParts, ringsOf, planStation, stationOrbit, baseSite, scienceOf, objScore, missionSits, autoInventory, GOALS, LEGACY, BODY, MISSIONS, goalName, goalInfo, phasesOf, evaluate, optimize, partsUsed, fits, catalog, cross, rng, G0, KG, U, usableProp };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_OPT = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -2846,7 +2864,7 @@ function renderNew() {
       <input type="text" id="mustQ" placeholder="Search your parts, e.g. Poodle, FL-T400, docking port" autocomplete="off"><div id="mustRes" style="display:grid;gap:4px;margin-top:6px"></div></div>`; }
   if (planet) h += `<div class="card"><h3>Today's in-game date</h3><div class="row2"><label class="f">Year<input type="number" id="nY" min="1" value="${st.date.y}"></label><label class="f">Day<input type="number" id="nD" min="1" max="426" value="${st.date.d}"></label></div><p class="note" style="margin:0">Used to work out the next transfer window to ${body}.</p></div>`;
   h += `<button class="btn primary" id="btnDesign">Design it</button><div id="runBox" hidden><div class="prog"><i id="runBar"></i></div><p class="note" id="runNote"></p></div>
-    <p class="note">Tests 500,000 designs across your phone's cores${d.kind === 'rocket' ? ' and gives you three to pick from: balanced, cheapest and lightest' : d.kind === 'station' || d.kind === 'base' ? ', split over every launch' : ''}.</p>`;
+    <p class="note">Tests ${fmt(tgt())} designs across your phone's cores${d.kind === 'rocket' ? ' and gives you three to pick from: balanced, cheapest and lightest' : d.kind === 'station' || d.kind === 'base' ? ', split over every launch' : ''}.</p>`;
   $('v-new').innerHTML = h;
 }
 const mustPool = () => { const k = st.draft.kind; return PARTS.filter(p => (k === 'station' || k === 'base' ? allowedStn(p) : allowed(p)) && !p.sci); };
@@ -2878,7 +2896,7 @@ $('v-new').addEventListener('click', e => {
 });
 
 // ---- the search: a pool of workers, one per spare core
-const TARGET = 500000, NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+const SEARCH = { quick: 500000, thorough: 1500000, deep: 3000000 }, tgt = () => SEARCH[st.search] || SEARCH.thorough, NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
 function makeWorker() {
   try {
     const code = [...document.querySelectorAll('script:not([src])')].slice(0, 3).map(s => s.textContent).join('\n') +
@@ -2897,7 +2915,7 @@ function runJob(w, msg, onTick) {
 async function runPool(inv, goal, opts, target, onTick, kind = 'rocket') {
   const P = getPool(), W = P.length ? P : [null], per = Math.ceil(target / W.length), counts = W.map(() => 0);
   // many short restarts beat a few long ones: a search that starts from a poor shape (say one stage) rarely climbs out of it
-  const nR = opts.restarts || (kind === 'rocket' ? Math.max(2, Math.min(16, Math.round(per / 6000))) : 2);
+  const nR = opts.restarts || (kind === 'rocket' ? Math.max(2, Math.min(40, Math.round(per / 6000))) : 2);
   const rs = await Promise.all(W.map((w, i) => runJob(w, { kind, inv, goal, opts: Object.assign({}, opts, { restarts: nR, iters: Math.ceil(per / nR), minTests: per, seed: 1000 + i * 100003, variantBase: i * nR }) }, t => { counts[i] = t; onTick(counts.reduce((a, b) => a + b, 0)); })));
   const good = rs.filter(x => x && !x.error);
   if (!good.length) return rs[0] || { error: 'Search failed.' };
@@ -2911,9 +2929,9 @@ async function designRocket() {
   const d = st.draft, goal = d.body + ':' + d.mission, crew = d.crew == null ? crewDefault(d.mission) : d.crew, inv = inventory();
   if (!Object.keys(inv).some(id => BY[id].cmd) || !Object.keys(inv).some(id => BY[id].ta != null)) { toast('Research at least a command pod and an engine in Career first.'); return; }
   $('btnDesign').disabled = true; $('runBox').hidden = false;
-  const lim = Object.assign({}, limits('rocket'), d.cargo ? { cargo: d.cargo } : {}), t0 = Date.now(), objs = ['balance', 'cheap', 'light'], part = Math.ceil(TARGET / objs.length), res = [];
+  const lim = Object.assign({}, limits('rocket'), d.cargo ? { cargo: d.cargo } : {}), t0 = Date.now(), objs = ['balance', 'cheap', 'light'], part = Math.ceil(tgt() / objs.length), res = [];
   let done = 0;
-  const show = n => { const f = Math.min(1, n / TARGET), el = (Date.now() - t0) / 1000, left = f > 0.03 ? el / f - el : null; $('runBar').style.width = (f * 100) + '%'; $('runNote').textContent = `Tested ${fmt(n)} of ${fmt(TARGET)} designs on ${getPool().length || 1} core${(getPool().length || 1) > 1 ? 's' : ''}${left != null ? ` · about ${left > 90 ? fmt(left / 60) + ' min' : fmt(left) + ' s'} left` : ''}`; };
+  const show = n => { const f = Math.min(1, n / tgt()), el = (Date.now() - t0) / 1000, left = f > 0.03 ? el / f - el : null; $('runBar').style.width = (f * 100) + '%'; $('runNote').textContent = `Tested ${fmt(n)} of ${fmt(tgt())} designs on ${getPool().length || 1} core${(getPool().length || 1) > 1 ? 's' : ''}${left != null ? ` · about ${left > 90 ? fmt(left / 60) + ' min' : fmt(left) + ' s'} left` : ''}`; };
   const must = (d.must || []).filter(id => inv[id] > 0);
   for (const ob of objs) { const R = await runPool(inv, goal, { limits: lim, objective: ob, crewed: crew, must }, part, n => show(done + n)); done += R.tested || part; res.push({ ob, R }); }
   const good = res.filter(x => !x.R.error);
@@ -2930,13 +2948,13 @@ async function designRocket() {
     const srbs = Object.keys(inv).filter(id => BY[id].srb && inv[id] > 0 && BY[id].tv >= 150).sort((a, b) => BY[b].tv - BY[a].tv).slice(0, 3);
     for (const sb of srbs) {
       $('runNote').textContent = `No design made it yet. Trying again built around the ${BY[sb].t}…`;
-      const S = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, must: [sb] }, Math.ceil(TARGET / 6), () => {});
+      const S = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, must: [sb] }, Math.ceil(tgt() / 6), () => {});
       if (!S.error && S.r.ok) { for (const o of good) o.R = Object.assign({}, o.R, { g: S.g, r: S.r }); break; }
     }
   }
   if (!good.some(o => o.R.r.ok)) {
     $('runNote').textContent = 'No design made it. Checking what is holding it back…';
-    const U = await runPool(inv, goal, { limits: Object.assign({}, d.cargo ? { cargo: d.cargo } : {}), objective: 'balance', crewed: crew }, 60000, () => {});
+    const U = await runPool(inv, goal, { limits: Object.assign({}, d.cargo ? { cargo: d.cargo } : {}), objective: 'balance', crewed: crew }, Math.ceil(tgt() / 8), () => {});
     // the free search may find a design that fits your buildings after all: re-check it against them and use it if it passes
     const fitR = !U.error && U.r.ok ? O.evaluate(U.g, goal, inv, false, Object.assign({}, lim, { objective: 'balance' })) : null;
     if (fitR && fitR.ok) { for (const o of good) o.R = Object.assign({}, o.R, { g: U.g, r: fitR }); }
@@ -2970,7 +2988,7 @@ async function design() {
   if (k === 'plane' && d.pmode === 'shuttle') {
     const miss = shuttleMissing(inv); if (miss.length) { toast(`A shuttle still needs ${miss.join(', ')}. Research them in Career.`, 6000); return; }
     runUI(true); const crew = d.crew == null ? true : d.crew, lim = Object.assign({}, limits('rocket'), d.cargo ? { cargo: d.cargo } : {});
-    const R = await runPool(inv, 'Kerbin:orbit', { limits: lim, objective: 'balance', crewed: crew, cargo: d.cargo || 0, must: (d.must || []).filter(id => inv[id] > 0) }, TARGET, progress(TARGET), 'shuttle');
+    const R = await runPool(inv, 'Kerbin:orbit', { limits: lim, objective: 'balance', crewed: crew, cargo: d.cargo || 0, must: (d.must || []).filter(id => inv[id] > 0) }, tgt(), progress(tgt()), 'shuttle');
     if (R.error) { runUI(false); toast(R.error, 5000); return; }
     return addMission({ kind: 'shuttle', goal: 'Kerbin:orbit', crewed: crew, cargo: d.cargo || 0, lim, s: R.s, tested: R.tested, optLabel: 'Shuttle' });
   }
@@ -2978,7 +2996,7 @@ async function design() {
     const rk = d.pmode !== 'air' && (d.rocketOnly || !has(inv, p => p.jet)); if (!has(inv, p => p.wing) || !has(inv, p => p.gear) || (!rk && (!has(inv, p => p.jet) || !has(inv, p => p.intake)))) { toast(rk ? 'A rocket plane needs wings and landing gear: research Aviation in Career.' : 'A plane needs jet engines, wings, air intakes and landing gear: research Aviation in Career.', 6000); return; }
     const air = d.pmode === 'air', task = air ? airTaskOf(d.air) : null, goal = air ? 'Air' : d.body + ':' + d.mission, crew = air ? true : (d.crew == null ? crewDefault(d.mission) : d.crew);
     runUI(true); const lim = limits('plane');
-    const R = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, task, rocketOnly: !air && !!d.rocketOnly, must: (d.must || []).filter(id => inv[id] > 0) }, TARGET, progress(TARGET), 'plane');
+    const R = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, task, rocketOnly: !air && !!d.rocketOnly, must: (d.must || []).filter(id => inv[id] > 0) }, tgt(), progress(tgt()), 'plane');
     if (R.error) { runUI(false); toast(R.error, 5000); return; }
     return addMission({ kind: air ? 'air' : 'plane', goal, task, crewed: crew, lim, d: R.d, tested: R.tested, optLabel: air ? 'Aircraft' : 'Spaceplane' });
   }
@@ -2990,7 +3008,7 @@ async function design() {
   const invS = inventoryStn(), limR = limits('rocket');
   const meta = await runJob(getPool()[0] || null, { kind: 'stationPlan', inv: invS, goal, opts: { must: (d.must || []).filter(id => invS[id] > 0), modules: mods, crew: d.stn.crew, auto: true, iters: 400, restarts: 4, limits: limR, objective: 'balance' } }, () => {});
   if (meta.error) { runUI(false); toast(meta.error, 5000); return; }
-  const per = Math.ceil(TARGET / meta.k), res = [], show = progress(TARGET); let done = 0;
+  const per = Math.ceil(tgt() / meta.k), res = [], show = progress(tgt()); let done = 0;
   for (let i = 0; i < meta.k; i++) {
     const invP = Object.assign({}, meta.invS); for (const [id, n] of Object.entries(meta.pkgs[i].fix)) invP[id] = (invP[id] || 0) + n;
     const R = await runPool(invP, meta.orbitGoal, { limits: Object.assign({}, limR || {}, { extraDv: meta.extraDv[i] }), objective: 'balance', station: { fix: meta.pkgs[i].fix }, crewed: false, restarts: 4, must: i === 0 ? (d.must || []).filter(id => BY[id] && !BY[id].stn && invP[id] > 0) : [] }, per, n => { show(done + n); $('runNote').textContent += ` · ${base ? 'lander' : 'launch'} ${i + 1} of ${meta.k}`; });
@@ -3354,6 +3372,7 @@ function renderCareer() {
   const c = st.career, set = unlocked(), cap = BUILD.rnd.cost[c.rnd - 1], inf = v => v === Infinity ? 'no limit' : fmt(v), sizeT = s => s ? `${s[0]}×${s[1]}×${s[2]} m` : 'any size';
   const lvl = (k, label, desc) => `<div class="bld"><div><b>${label}</b><div class="note">${desc(c[k] - 1)}</div></div><div class="lv">${[1, 2, 3].map(v => `<button data-bld="${k}" data-lv="${v}" aria-pressed="${c[k] === v}">${v}</button>`).join('')}</div></div>`;
   let h = `<div class="card"><h3>Buildings</h3>${lvl('vab', 'Vehicle Assembly Building', i => `${inf(BUILD.vab.parts[i])} parts`)}${lvl('pad', 'Launch Pad', i => `${inf(BUILD.pad.mass[i])} t, ${sizeT(BUILD.pad.size[i])}`)}${lvl('sph', 'Spaceplane Hangar', i => `${inf(BUILD.sph.parts[i])} parts`)}${lvl('runway', 'Runway', i => `${inf(BUILD.runway.mass[i])} t, ${sizeT(BUILD.runway.size[i])}`)}${lvl('rnd', 'Research & Development', i => `Nodes up to ${inf(BUILD.rnd.cost[i])} science`)}</div>`;
+  h += `<div class="card"><h3>Search size</h3><p class="note" style="margin:0 0 8px">How many designs to test each time you press Design. More finds better craft but takes longer; planes and shuttles take about twice as long as rockets.</p><select id="searchSize">${[['quick', 'Quick · 500,000 designs'], ['thorough', 'Thorough · 1.5 million designs'], ['deep', 'Deep · 3 million designs']].map(([k, t]) => `<option value="${k}"${(st.search || 'thorough') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
   h += `<div class="card"><h3>Researched tech</h3><p class="note" style="margin:0 0 8px">${set.size} of ${TECH.length} nodes · ${PARTS.filter(allowed).length} parts unlocked. Ticking a node also ticks what it needs. Showing what you have and what you can research next.</p><div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-preset="start">Start only</button><select id="upTier" style="width:auto;padding:6px 8px;font-size:13px"><option value="">Everything up to tier…</option>${[2, 3, 4, 5, 6, 7, 8].map(t => `<option value="${t}">Tier ${t}</option>`).join('')}</select><button class="btn small" data-preset="all">Everything</button><button class="btn small" data-preset="tree">${st.fullTree ? 'Hide locked' : 'Show whole tree'}</button></div></div>`;
   for (let tier = 1; tier <= 9; tier++) {
     const ns = TECH.filter(n => n[1] === tier).map(n => TBY[n[0]]).filter(n => st.fullTree || set.has(n.name) || reqMet(n, set)); if (!ns.length) continue;
@@ -3365,7 +3384,7 @@ function renderCareer() {
   $('v-career').innerHTML = h;
 }
 $('v-career').addEventListener('click', e => { const b = e.target.closest('[data-bld]'); if (b) { st.career[b.dataset.bld] = +b.dataset.lv; save(); renderCareer(); return; } const p = e.target.closest('[data-preset]'); if (p) { if (p.dataset.preset === 'tree') st.fullTree = !st.fullTree; else st.career.nodes = p.dataset.preset === 'all' ? TECH.map(n => n[0]) : ['Start']; save(); renderCareer(); } });
-$('v-career').addEventListener('change', e => { if (e.target.id === 'upTier' && e.target.value) { st.career.nodes = TECH.filter(n => n[1] <= +e.target.value).map(n => n[0]); save(); renderCareer(); return; } const n = e.target.closest('[data-node]'); if (n) { const set = unlocked(); if (n.checked) addNode(n.dataset.node, set); else dropNode(n.dataset.node, set); st.career.nodes = [...set]; save(); renderCareer(); return; } const md = e.target.closest('[data-mod]'); if (md) { st.mods[md.dataset.mod] = md.checked; save(); renderCareer(); } });
+$('v-career').addEventListener('change', e => { if (e.target.id === 'searchSize') { st.search = e.target.value; save(); return; } if (e.target.id === 'upTier' && e.target.value) { st.career.nodes = TECH.filter(n => n[1] <= +e.target.value).map(n => n[0]); save(); renderCareer(); return; } const n = e.target.closest('[data-node]'); if (n) { const set = unlocked(); if (n.checked) addNode(n.dataset.node, set); else dropNode(n.dataset.node, set); st.career.nodes = [...set]; save(); renderCareer(); return; } const md = e.target.closest('[data-mod]'); if (md) { st.mods[md.dataset.mod] = md.checked; save(); renderCareer(); } });
 
 // ---- Android app bridge (self-updating shell)
 const AB = window.AndroidBridge || null;

@@ -1,8 +1,8 @@
 {
-  "web": 52,
+  "web": 53,
   "apk": 4,
-  "sha256": "067aa4daff29dd3ff902bce1cd00acb1f418518f41c1e7aac0c662b3d6d1bdef",
-  "notes": "Rocket search: some searches start with 2 or 4 strapped-on solid boosters of each kind; if nothing passes, it retries built around each big booster before giving up",
+  "sha256": "ff8509983a8bfe554824cc44c1b098aa2e9bcfdba6fa8c362bc9c125744b24e4",
+  "notes": "Search size setting in Career (Quick 500k / Thorough 1.5M default / Deep 3M); crossover moves between good designs during the search",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2
