@@ -182,10 +182,10 @@ jet('whiplash', 'J-X4 "Whiplash" Turbo Ramjet Engine', 1.8, 2250, { t: 130, isp:
 jet('goliath', 'J-90 "Goliath" Turbofan Engine', 4.5, 2600, { t: 360, isp: 12600, vel: [[0, 1], [0.5, 0.9], [1, 0.92], [1.5, 0.5], [1.8, 0]] }, 'r', 4.4);
 // air intakes: area m² (estimate), supersonic shape
 const intake = (id, t, m, c, a, sup, d, h, o = {}) => add('Aerodynamics', id, t, Object.assign({ m, dry: m, $: c, intake: { a, sup }, d, h }, o));
-intake('circular', 'Circular Intake', 0.01, 280, 0.008, 0, 1.25, 0.3, { nose: true });
-intake('circularS', 'Small Circular Intake', 0.01, 120, 0.002, 0, 0.625, 0.2, { nose: true });
-intake('ramp', 'Adjustable Ramp Intake', 0.13, 1000, 0.0074, 1, 1.25, 0.9, { nose: true });
-intake('shockcone', 'Shock Cone Intake', 0.12, 1100, 0.012, 1, 1.25, 1.2, { nose: true });
+intake('circular', 'Circular Intake', 0.04, 680, 0.008, 0, 1.25, 0.3, { nose: true });
+intake('circularS', 'Small Circular Intake', 0.007, 250, 0.002, 0, 0.625, 0.2, { nose: true });
+intake('ramp', 'Adjustable Ramp Intake', 0.06, 2680, 0.0074, 1, 1.25, 0.9, { nose: true });
+intake('shockcone', 'Shock Cone Intake', 0.12, 3050, 0.012, 1, 1.25, 1.2, { nose: true });
 intake('xmg50', 'XM-G50 Radial Air Intake', 0.02, 250, 0.003, 0, 'r', 0.7);
 intake('dsi', 'Mk1 Diverterless Supersonic Intake', 1.17, 720, 0.006, 1, 1.25, 1.875, { dry: 0.17, lf: 200, ox: 0 });
 intake('nacelle', 'Engine Nacelle', 0.9, 600, 0.005, 0, 1.25, 1.875, { dry: 0.15, lf: 150, ox: 0, pod: true });
@@ -230,7 +230,7 @@ fin('deltadeluxe', 'Delta-Deluxe Winglet', 0.078, 600, 0.65);
 // nose cones (approximate)
 add('Aerodynamics', 'noseCone', 'Aerodynamic Nose Cone', { m: 0.03, dry: 0.03, $: 240, d: 1.25, h: 0.8, cone: true });
 add('Aerodynamics', 'noseConeS', 'Small Nose Cone', { m: 0.01, dry: 0.01, $: 180, d: 0.625, h: 0.5, cone: true });
-add('Aerodynamics', 'noseCone25', 'Protective Rocket Nose Cone Mk7', { m: 0.1, dry: 0.1, $: 450, d: 2.5, h: 1.4, cone: true, a: 1 });
+add('Aerodynamics', 'noseCone25', 'Protective Rocket Nose Cone Mk7', { m: 0.2, dry: 0.2, $: 450, d: 2.5, h: 1.4, cone: true, a: 1 });
 // decouplers (approximate masses and costs)
 const dec = (id, t, m, c, d, o = {}) => add('Coupling', id, t, Object.assign({ m, dry: m, $: c, d, h: 0.2, dec: true, a: 1 }, o));
 dec('td06', 'TD-06 Decoupler', 0.02, 160, 0.625);
@@ -241,17 +241,20 @@ dec('tt38k', 'TT-38K Radial Decoupler', 0.025, 600, 'r', { radial: true });
 dec('tt70', 'TT-70 Radial Decoupler', 0.05, 700, 'r', { radial: true });
 // adapters (approximate)
 const adp = (id, t, m, c, d, d2, h) => add('Coupling', id, t, { m, dry: m, $: c, d, d2, h, adp: true, a: 1 });
-adp('fla10', 'FL-A10 Adapter', 0.025, 100, 0.625, 1.25, 0.3);
-adp('rockomaxAdp', 'Rockomax Brand Adapter', 0.08, 500, 1.25, 2.5, 0.9);
-adp('kerbodyneAdp', 'Kerbodyne ADTP-2-3', 0.2, 1000, 2.5, 3.75, 1.2);
-adp('mk2to125', 'Mk2 to 1.25m Adapter', 0.29, 550, 1.25, 'mk2', 1.875);
-adp('mk3to25', 'Mk3 to 2.5m Adapter', 0.79, 800, 2.5, 'mk3', 2.5);
-adp('mk3toMk2', 'Mk3 to Mk2 Adapter', 0.6, 800, 'mk2', 'mk3', 2.5);
+adp('fla10', 'FL-A10 Adapter', 0.05, 150, 0.625, 1.25, 0.3);
+adp('rockomaxAdp', 'Rockomax Brand Adapter', 0.1, 500, 1.25, 2.5, 0.9);
+adp('kerbodyneAdp', 'Kerbodyne ADTP-2-3', 1.88, 1000, 2.5, 3.75, 1.2);
+tank('mk2to125', 'Mk2 to 1.25m Adapter', 2.29, 0.29, 180, 220, 550, 'mk2', 1.875, { d2: 1.25, tech: 'Supersonic Flight' });
+adp('mk3to25', 'Mk3 to 2.5m Adapter', 1.79, 2500, 2.5, 'mk3', 2.5);
+tank('mk3toMk2', 'Mk3 to Mk2 Adapter', 11.43, 1.43, 900, 1100, 2200, 'mk3', 2.5, { d2: 'mk2' });
 // multi-couplers: one stack node on top, several engine nodes underneath (≈ wiki figures)
 const cpl = (id, t, m, c, d, n, d2, h, tech) => add('Coupling', id, t, { m, dry: m, $: c, d, d2, h, coupler: n, tech });
-cpl('tvr200l', 'TVR-200L Stack Bi-Adapter', 0.1, 400, 1.25, 2, 1.25, 0.6, 'Advanced Construction');
-cpl('tvr300l', 'TVR-300L Stack Tri-Adapter', 0.15, 500, 1.25, 3, 1.25, 0.6, 'Advanced Construction');
-cpl('tvr2160c', 'TVR-2160C Mk2 Stack Quad-Coupler', 0.2, 2000, 2.5, 4, 1.25, 0.9, 'Advanced Construction');
+cpl('tvr200', 'TVR-200 Stack Bi-Coupler', 0.1, 400, 1.25, 2, 1.25, 0.6, 'Specialized Construction');
+cpl('tvr1180c', 'TVR-1180C Mk1 Stack Tri-Coupler', 0.15, 680, 1.25, 3, 1.25, 0.6, 'Advanced Construction');
+cpl('tvr2160c', 'TVR-2160C Mk2 Stack Quad-Coupler', 0.175, 2000, 1.25, 4, 1.25, 0.6, 'Advanced MetalWorks');
+cpl('tvr200l', 'TVR-200L Stack Bi-Adapter', 0.1, 400, 2.5, 2, 1.25, 0.9, 'Meta-Materials');
+cpl('tvr300l', 'TVR-300L Stack Tri-Adapter', 0.15, 600, 2.5, 3, 1.25, 0.9, 'Meta-Materials');
+cpl('tvr400l', 'TVR-400L Stack Quad-Adapter', 0.2, 800, 2.5, 4, 1.25, 0.9, 'Meta-Materials');
 // parachutes (wiki)
 const chute = (id, t, m, c, d, full) => add('Utility', id, t, { m, dry: m, $: c, d, h: 0.4, chute: { full } });
 chute('mk16', 'Mk16 Parachute', 0.1, 422, 0.625, 20.7);
@@ -260,22 +263,22 @@ chute('mk2r', 'Mk2-R Radial-Mount Parachute', 0.1, 400, 'r', 41.3);
 chute('mk25', 'Mk25 Parachute', 0.2, 400, 1.25, 6.3);
 chute('mk12r', 'Mk12-R Radial-Mount Drogue Chute', 0.075, 150, 'r', 7.7);
 // heat shields, landing legs and gear (approximate masses)
-add('Utility', 'hs125', 'Heat Shield (1.25m)', { m: 0.3, dry: 0.3, $: 300, d: 1.25, h: 0.2, shield: true, a: 1 });
-add('Utility', 'hs25', 'Heat Shield (2.5m)', { m: 0.9, dry: 0.9, $: 900, d: 2.5, h: 0.3, shield: true, a: 1 });
+add('Utility', 'hs125', 'Heat Shield (1.25m)', { m: 0.3, dry: 0.1, $: 300, d: 1.25, h: 0.2, shield: true, a: 1 });
+add('Utility', 'hs25', 'Heat Shield (2.5m)', { m: 1.3, dry: 0.5, $: 600, d: 2.5, h: 0.3, shield: true, a: 1 });
 const leg = (id, t, m, c, o = {}) => add('Ground', id, t, Object.assign({ m, dry: m, $: c, d: 'r', h: 1, leg: true }, o));
 leg('lt05', 'LT-05 Micro Landing Strut', 0.015, 200, { tol: 10 });
 leg('lt1', 'LT-1 Landing Struts', 0.05, 440, { tol: 12 });
 leg('lt2', 'LT-2 Landing Strut', 0.1, 340, { tol: 12 });
-leg('ly01', 'LY-01 Fixed Landing Gear', 0.025, 150, { gear: true, a: 1 });
-leg('ly05', 'LY-05 Steerable Landing Gear', 0.025, 200, { gear: true, a: 1 });
-leg('ly10', 'LY-10 Small Landing Gear', 0.045, 400, { gear: true });
-leg('ly35', 'LY-35 Medium Landing Gear', 0.2, 600, { gear: true, a: 1 });
-leg('ly60', 'LY-60 Large Landing Gear', 0.45, 1500, { gear: true, a: 1 });
+leg('ly01', 'LY-01 Fixed Landing Gear', 0.025, 100, { gear: true, a: 1 });
+leg('ly05', 'LY-05 Steerable Landing Gear', 0.015, 150, { gear: true, a: 1 });
+leg('ly10', 'LY-10 Small Landing Gear', 0.045, 600, { gear: true });
+leg('ly35', 'LY-35 Medium Landing Gear', 0.25, 700, { gear: true, a: 1 });
+leg('ly60', 'LY-60 Large Landing Gear', 0.4, 1200, { gear: true, a: 1 });
 // space station parts (KSP wiki figures; ≈ where estimated). stn: hab | port | power | battery | rcs | mono
 const stn = (id, t, m, c, d, h, kind, o = {}) => add('Station', id, t, Object.assign({ m, dry: m, $: c, d, h, stn: kind }, o));
-stn('hitchhiker', 'PPD-10 Hitchhiker Storage Container', 2.5, 3500, 2.5, 1.9, 'hab', { crew: 4, tech: 'Space Exploration' });
+stn('hitchhiker', 'PPD-10 Hitchhiker Storage Container', 2.5, 4000, 2.5, 1.9, 'hab', { crew: 4, tech: 'Space Exploration' });
 stn('mpl', 'Mobile Processing Lab MPL-LG-2', 3.5, 4000, 2.5, 2.8, 'hab', { crew: 2, lab: true, ec: 5, tech: 'Advanced Exploration', a: 1 });
-stn('cupola', 'PPD-12 Cupola Module', 4.5, 3200, 1.25, 1.5, 'hab', { crew: 1, tech: 'Advanced Exploration', a: 1 });
+stn('cupola', 'PPD-12 Cupola Module', 0.89, 3200, 2.5, 1.5, 'hab', { crew: 1, tech: 'Advanced Exploration', a: 1 });
 stn('mk1cabin', 'Mk1 Crew Cabin', 0.65, 600, 1.25, 1.9, 'hab', { crew: 2, tech: 'Aviation', a: 1 });
 stn('portJr', 'Clamp-O-Tron Jr. Docking Port', 0.02, 280, 0.625, 0.2, 'port', { tech: 'Precision Engineering' });
 stn('port', 'Clamp-O-Tron Docking Port', 0.05, 280, 1.25, 0.3, 'port', { tech: 'Advanced Construction' });
@@ -292,8 +295,8 @@ stn('z200', 'Z-200 Rechargeable Battery Bank', 0.01, 360, 'r', 0, 'battery', { b
 stn('z400', 'Z-400 Rechargeable Battery', 0.02, 550, 'r', 0, 'battery', { bat: 400, tech: 'Advanced Electrics' });
 stn('z1k', 'Z-1k Rechargeable Battery Bank', 0.05, 880, 'r', 0, 'battery', { bat: 1000, tech: 'Advanced Electrics' });
 stn('z4k', 'Z-4K Rechargeable Battery Bank', 0.2, 4500, 'r', 0, 'battery', { bat: 4000, tech: 'High-Power Electrics' });
-stn('rv105', 'RV-105 RCS Thruster Block', 0.05, 620, 'r', 0, 'rcs', { tech: 'Advanced Flight Control' });
-stn('pa7', 'Place-Anywhere 7 Linear RCS Port', 0.02, 250, 'r', 0, 'rcs', { tech: 'Advanced Flight Control', a: 1 });
+stn('rv105', 'RV-105 RCS Thruster Block', 0.04, 45, 'r', 0, 'rcs', { tech: 'Advanced Flight Control' });
+stn('pa7', 'Place-Anywhere 7 Linear RCS Port', 0.02, 25, 'r', 0, 'rcs', { tech: 'Advanced Flight Control', a: 1 });
 stn('fr10', 'FL-R10 RCS Fuel Tank', 0.1, 200, 0.625, 0.3, 'mono', { dry: 0.02, mono: 20, tech: 'Advanced Flight Control', a: 1 });
 stn('fr25', 'FL-R25 RCS Fuel Tank', 0.75, 600, 1.25, 0.5, 'mono', { dry: 0.15, mono: 150, tech: 'Specialized Control', a: 1 });
 stn('fr1', 'FL-R1 RCS Fuel Tank', 3.4, 1300, 2.5, 1, 'mono', { dry: 0.4, mono: 750, tech: 'Specialized Control', a: 1 });
@@ -308,12 +311,12 @@ const modded = (tag, fn) => { const n0 = P.length; fn(); for (let i = n0; i < P.
 for (const [id, pt] of [['portJr', 'size0'], ['port', 'size1'], ['portIn', 'size1'], ['portSh', 'size1'], ['portSr', 'size2']]) P.find(p => p.id === id).pt = pt;
 modded('mh', () => { // Making History (stock DLC): 1.875 m engines and tanks
   const e2 = (id, t, m, c, tv, ia, iv, d, h, gim, tech) => eng(id, t, m, c, +(tv * ia / iv).toFixed(1), tv, ia, iv, d, h, { a: 1, g0: gim, tech });
-  e2('mastodon', 'KE-1 "Mastodon"', 5, 22000, 1350, 290, 305, 1.875, 2.6, 5, 'Heavier Rocketry');
-  e2('cheetah', 'LV-T91 "Cheetah"', 1, 850, 125, 150, 355, 1.25, 1.2, 3, 'Propulsion Systems');
+  e2('mastodon', 'KE-1 "Mastodon"', 5, 8000, 1350, 290, 305, 2.5, 2.6, 5, 'Heavier Rocketry');
+  e2('cheetah', 'LV-T91 "Cheetah"', 1, 850, 125, 150, 355, 1.875, 1.2, 3, 'Propulsion Systems');
   e2('bobcat', 'LV-TX87 "Bobcat"', 2, 2000, 400, 290, 310, 1.875, 1.8, 5, 'Heavy Rocketry');
-  e2('skiff', 'RE-I2 "Skiff"', 1.6, 1600, 300, 265, 330, 1.875, 1.6, 2, 'Heavier Rocketry');
-  e2('wolfhound', 'RE-J10 "Wolfhound"', 3.3, 2000, 375, 70, 380, 1.875, 2.0, 3, 'Very Heavy Rocketry');
-  e2('kodiak', 'RK-7 "Kodiak"', 1.25, 1300, 260, 285, 300, 1.25, 1.2, 0, 'General Rocketry');
+  e2('skiff', 'RE-I2 "Skiff"', 1.6, 2300, 300, 265, 330, 2.5, 1.6, 2, 'Heavier Rocketry');
+  e2('wolfhound', 'RE-J10 "Wolfhound"', 3.3, 3000, 375, 70, 380, 2.5, 2.0, 3, 'Very Heavy Rocketry');
+  e2('kodiak', 'RK-7 "Kodiak"', 1.25, 1100, 260, 285, 300, 1.25, 1.2, 0, 'General Rocketry');
   for (const [id, u, h, tech] of [['tx220', 220, 0.47, 'Fuel Systems'], ['tx440', 440, 0.94, 'Fuel Systems'], ['tx900', 900, 1.875, 'Adv. Fuel Systems'], ['tx1800', 1800, 3.75, 'Adv. Fuel Systems']]) {
     const lf = u * 0.45, ox = u * 0.55, dry = u * 0.005 / 8; tank(id, `FL-TX${u} Fuel Tank`, +(dry + u * 0.005).toFixed(4), +dry.toFixed(4), lf, ox, Math.round(u * 1.6), 1.875, h, { a: 1, tech });
   }
@@ -368,6 +371,7 @@ modded('kas', () => { // Kerbal Attachment System: joints, struts and pipes an e
 const TECH = [["Start",1,0,[],1],["Basic Rocketry",2,5,["Start"],1],["Engineering 101",2,5,["Start"],1],["Survivability",3,15,["Engineering 101"],1],["Stability",3,18,["Engineering 101","Basic Rocketry"],1],["General Rocketry",3,20,["Basic Rocketry"],1],["Aviation",4,45,["Stability"],1],["Basic Science",4,45,["Survivability"],1],["Flight Control",4,45,["Survivability","Stability"],1],["Advanced Rocketry",4,45,["General Rocketry"],1],["General Construction",4,45,["Stability","General Rocketry"],1],["Propulsion Systems",5,90,["Advanced Rocketry"],1],["Space Exploration",5,90,["Basic Science"],1],["Advanced Flight Control",5,90,["Flight Control"],1],["Landing",5,90,["Flight Control","Aviation"],1],["Aerodynamics",5,90,["Aviation","General Construction"],1],["Electrics",5,90,["Basic Science"],1],["Heavy Rocketry",5,90,["Advanced Rocketry"],1],["Fuel Systems",5,90,["Advanced Rocketry","General Construction"],1],["Advanced Construction",5,90,["General Construction"],1],["Miniaturization",5,90,["Basic Science"],1],["Actuators",6,160,["Advanced Construction"],1],["Command Modules",6,160,["Space Exploration","Advanced Flight Control"],1],["Heavier Rocketry",6,160,["Heavy Rocketry"],1],["Precision Engineering",6,160,["Miniaturization","Electrics"],1],["Advanced Exploration",6,160,["Space Exploration"],1],["Specialized Control",6,160,["Advanced Flight Control"],1],["Advanced Landing",6,160,["Landing"],1],["Supersonic Flight",6,160,["Aerodynamics"],1],["Adv. Fuel Systems",6,160,["Propulsion Systems","Fuel Systems"],1],["Advanced Electrics",6,160,["Electrics"],1],["Specialized Construction",6,160,["Advanced Construction"],1],["Precision Propulsion",6,160,["Propulsion Systems"],1],["Advanced Aerodynamics",6,160,["Aerodynamics"],1],["Heavy Landing",7,300,["Advanced Landing"],1],["Scanning Tech",7,300,["Advanced Exploration","Precision Engineering"],1],["Unmanned Tech",7,300,["Precision Engineering"],1],["Nuclear Propulsion",7,300,["Adv. Fuel Systems","Heavier Rocketry"],0],["Advanced MetalWorks",7,300,["Specialized Construction"],1],["Field Science",7,300,["Advanced Landing","Advanced Exploration"],1],["High Altitude Flight",7,300,["Supersonic Flight"],1],["Large Volume Containment",7,300,["Adv. Fuel Systems","Specialized Construction"],1],["Composites",7,300,["Specialized Construction"],1],["Electronics",7,300,["Precision Engineering","Advanced Electrics"],1],["High-Power Electrics",7,300,["Advanced Electrics"],1],["Heavy Aerodynamics",7,300,["Advanced Aerodynamics"],1],["Ion Propulsion",8,550,["Scanning Tech","Unmanned Tech"],0],["Hypersonic Flight",8,550,["High Altitude Flight"],1],["Nanolathing",8,550,["Advanced MetalWorks"],1],["Advanced Unmanned Tech",8,550,["Unmanned Tech"],1],["Meta-Materials",8,550,["Composites"],1],["Very Heavy Rocketry",8,550,["Large Volume Containment","Heavier Rocketry"],1],["Advanced Science Tech",8,550,["Scanning Tech","Field Science"],1],["Advanced Motors",8,550,["Field Science"],1],["Specialized Electrics",8,550,["High-Power Electrics"],1],["High-Performance Fuel Systems",8,550,["Large Volume Containment"],1],["Experimental Aerodynamics",8,550,["Heavy Aerodynamics"],1],["Automation",8,550,["Unmanned Tech","Electronics"],1],["Aerospace Tech",9,1000,["Hypersonic Flight"],1],["Large Probes",9,1000,["Advanced Unmanned Tech","Automation"],1],["Experimental Science",9,1000,["Advanced Science Tech"],1],["Experimental Motors",9,1000,["Advanced Motors"],1],["Experimental Electrics",9,1000,["Specialized Electrics"],1]];
 const PART_TECH = {"mk1pod":"Start","mk1-3pod":"Command Modules","landerSmall":"Advanced Flight Control","landerMk2":"Command Modules","cockpitMk2":"Supersonic Flight","cockpitMk3":"Heavy Aerodynamics","hecs2":"Advanced Unmanned Tech","mk2drone":"Automation","oscarB":"Propulsion Systems","flt100":"Basic Rocketry","flt200":"General Rocketry","flt400":"Advanced Rocketry","flt800":"Fuel Systems","x200-8":"Fuel Systems","x200-16":"Fuel Systems","x200-32":"Fuel Systems","jumbo64":"Adv. Fuel Systems","s3-3600":"Large Volume Containment","s3-7200":"Large Volume Containment","s3-14400":"High-Performance Fuel Systems","r4":"Precision Propulsion","r11":"Propulsion Systems","r12":"Precision Propulsion","mk2lfoS":"Supersonic Flight","mk3lfoS":"Experimental Aerodynamics","mk3lfo":"Experimental Aerodynamics","mk3lfoL":"Experimental Aerodynamics","mk2lfS":"Supersonic Flight","mk3lfS":"Heavy Aerodynamics","mk3lfL":"Experimental Aerodynamics","ncs":"Aerodynamics","spider":"Precision Propulsion","twitch":"Precision Propulsion","thud":"Advanced Rocketry","ant":"Propulsion Systems","spark":"Propulsion Systems","terrier":"Advanced Rocketry","reliant":"General Rocketry","swivel":"Basic Rocketry","vector":"Very Heavy Rocketry","dart":"Hypersonic Flight","nerv":"Nuclear Propulsion","poodle":"Heavy Rocketry","skipper":"Heavy Rocketry","mainsail":"Heavier Rocketry","twinboar":"Heavier Rocketry","rhino":"Very Heavy Rocketry","mammoth":"Very Heavy Rocketry","puff":"Precision Propulsion","rapier":"Aerospace Tech","shrimp":"Precision Propulsion","mite":"Propulsion Systems","flea":"Start","hammer":"Basic Rocketry","thumper":"General Rocketry","kickback":"Heavy Rocketry","thoroughbred":"Heavier Rocketry","clydesdale":"Very Heavy Rocketry","panther":"Supersonic Flight","whiplash":"Hypersonic Flight","goliath":"Heavy Aerodynamics","circularS":"Aviation","ramp":"High Altitude Flight","shockcone":"Hypersonic Flight","xmg50":"Aerodynamics","dsi":"High Altitude Flight","precooler":"Hypersonic Flight","connA":"Aerodynamics","connB":"Aviation","connD":"Advanced Aerodynamics","deltaS":"Advanced Aerodynamics","structA":"Supersonic Flight","structD":"Advanced Aerodynamics","sweptA":"Advanced Aerodynamics","swept":"Aviation","bigSdelta":"Experimental Aerodynamics","bigSstrake":"Experimental Aerodynamics","fat455":"Heavy Aerodynamics","elevon1":"Aviation","elevon3":"Advanced Aerodynamics","elevon5":"Advanced Aerodynamics","bigSelevon1":"Experimental Aerodynamics","bigSelevon2":"Experimental Aerodynamics","canard":"Advanced Aerodynamics","canardAdv":"Hypersonic Flight","fat455tail":"Heavy Aerodynamics","bigStail":"Experimental Aerodynamics","basicfin":"Start","avt1":"Stability","avr8":"Flight Control","deltadeluxe":"Flight Control","noseCone":"Stability","noseConeS":"Aerodynamics","noseCone25":"Advanced Construction","td06":"Precision Engineering","td12":"Engineering 101","td25":"General Construction","td37":"Large Volume Containment","tt38k":"Stability","tt70":"Advanced Construction","fla10":"Miniaturization","kerbodyneAdp":"Large Volume Containment","mk3to25":"Heavy Aerodynamics","mk3toMk2":"Experimental Aerodynamics","mk16":"Start","mk16xl":"Landing","mk2r":"Survivability","mk25":"Advanced Landing","mk12r":"Survivability","hs125":"Survivability","hs25":"Landing","lt05":"Survivability","lt1":"Landing","lt2":"Advanced Landing","ly10":"Landing","ly35":"Advanced Landing","ly60":"Heavy Landing","cockpitMk1":"Aviation","juno":"Aviation","mk0lf":"Aviation","mk1lf":"Aviation","connE":"Aviation","structC":"Aviation","ly01":"Aviation","ly05":"Aviation","tailfin":"Aviation","cockpitMk1i":"Aerodynamics","wheesley":"Aerodynamics","nacelle":"Aerodynamics","connC":"Aerodynamics","structB":"Aerodynamics","sweptB":"Aerodynamics","circular":"Aerodynamics","okto":"Electrics","hecs":"Precision Engineering","rc001s":"Advanced Unmanned Tech","rcl01":"Large Probes","mk2lfo":"High Altitude Flight","mk2lf":"High Altitude Flight","mk3lf":"Heavy Aerodynamics","delta":"Advanced Aerodynamics","strake":"Supersonic Flight","elevon2":"Advanced Aerodynamics","rockomaxAdp":"General Construction","mk2to125":"Supersonic Flight"};
 for (const p of P) p.tech = p.tech || PART_TECH[p.id] || 'Start';
+for (const id of ['ant', 'vector', 'dart', 'twinboar', 'bobcat', 'cheetah', 'skiff', 'mastodon']) { const p = P.find(x => x.id === id); if (p) p.srf = true; } // wiki: also radially mountable
 // Building levels (stock, as in CustomBarnKit's defaults): part count, mass (t), size w×h×l (m), R&D node cost limit
 const BUILD = {
   vab: { name: 'Vehicle Assembly Building', parts: [30, 255, Infinity] },
@@ -381,11 +385,11 @@ const sci = (id, t, m, c, d, h, tech, o = {}) => P.push(Object.assign({ cat: 'Sc
 sci('goo', 'Mystery Goo Containment Unit', 0.05, 800, 'r', 0.5, 'Start');
 sci('thermo', '2HOT Thermometer', 0.005, 900, 'r', 0.15, 'Engineering 101');
 sci('baro', 'PresMat Barometer', 0.005, 880, 'r', 0.15, 'Survivability');
-sci('scijr', 'SC-9001 Science Jr.', 0.2, 1000, 1.25, 1.0, 'Basic Science');
+sci('scijr', 'SC-9001 Science Jr.', 0.2, 1800, 1.25, 1.0, 'Basic Science');
 sci('esu', 'Experiment Storage Unit', 0.04, 1000, 'r', 0.3, 'Basic Science', { a: 1 });
 sci('seismic', 'Double-C Seismic Accelerometer', 0.005, 6000, 'r', 0.2, 'Electronics');
-sci('magneto', 'Magnetometer Boom', 0.05, 2800, 'r', 0.4, 'Electronics', { a: 1 });
-sci('gravioli', 'GRAVMAX Negative Gravioli Detector', 0.005, 8000, 'r', 0.2, 'Advanced Science Tech');
+sci('magneto', 'Magnetometer Boom', 0.05, 2200, 'r', 0.4, 'Electronics', { a: 1 });
+sci('gravioli', 'GRAVMAX Negative Gravioli Detector', 0.005, 8800, 'r', 0.2, 'Advanced Science Tech');
 sci('afsv', 'Atmospheric Fluid Spectro-Variometer', 0.005, 6500, 'r', 0.3, 'Scanning Tech', { a: 1 });
 sci('weather', 'PD-3 Weather Analyzer', 0.05, 2500, 'r', 0.3, 'Precision Engineering', { a: 1 });
 sci('comm16', 'Communotron 16', 0.005, 300, 'r', 0.6, 'Engineering 101');
@@ -948,7 +952,8 @@ function catalog(inv) {
 // extras chosen by rule, not search: parachute for goals that come home, legs for landings, fins on the first stage
 // what "best" means once the goal is reached
 function objScore(obj, x) {
-  if (obj === 'cheap' || obj === 'balance') return -x.cost * 0.3 - x.parts * 5;
+  if (obj === 'cheap') return -x.cost * 0.3 - x.parts * 5;
+  if (obj === 'balance') return -x.cost * 0.3 - x.mass * 60 - x.parts * 5; // cost and mass both count (1 t weighs like about √200)
   if (obj === 'light') return -x.mass * 200 - x.parts * 2;
   if (obj === 'parts') return -x.parts * 60 - x.cost * 0.01;
   if (obj === 'science') return x.science * 30 - x.cost * 0.02 - x.mass * 5;
@@ -1753,7 +1758,14 @@ function fitMount(d, inv) {
   const B = id => BY[id], J = B(d.jet.id), last = B(d.tanks.length ? d.tanks[d.tanks.length - 1] : d.cmd), prev = B(d.tanks.length > 1 ? d.tanks[d.tanks.length - 2] : d.cmd), n1 = x => x === 'mk2' ? 1.25 : x;
   const tail = last.d2 != null && d.tanks.length ? (n1(prev.d) === n1(last.d) ? n1(last.d2) : n1(last.d)) : n1(last.d);
   const tailRocket = d.rocket && B(d.rocket.id).d !== 'r' && d.rocket.id !== d.jet.id;
-  const pods = d.intakes.filter(([id]) => B(id).pod).reduce((a, [, n]) => a + n, 0);
+  let pods = d.intakes.filter(([id]) => B(id).pod).reduce((a, [, n]) => a + n, 0);
+  // repair as a player would: jets that have nowhere to go get a pair of nacelles (the jet count made even)
+  if (J.d !== 'r' && (tailRocket || d.jet.n > 1) && (pods < d.jet.n || d.jet.n % 2)) {
+    const wantN = d.jet.n % 2 ? ((inv[d.jet.id] || 0) > d.jet.n ? d.jet.n + 1 : Math.max(2, d.jet.n - 1)) : d.jet.n;
+    const pod = Object.keys(inv).filter(id => B(id) && B(id).pod && (inv[id] || 0) >= wantN).sort((a, b) => B(a).m - B(b).m)[0];
+    const coupler = !tailRocket && Object.keys(inv).some(id => (inv[id] || 0) > 0 && B(id) && B(id).coupler === d.jet.n && B(id).d === tail);
+    if (pod && !coupler && (inv[d.jet.id] || 0) >= wantN) { d.jet.n = wantN; d.intakes = d.intakes.filter(([id]) => !B(id).pod).concat([[pod, wantN]]); pods = wantN; }
+  }
   const m = { kind: null, adp: null, cpl: null, err: null };
   const adapterFor = (from, to) => from === to ? undefined : Object.keys(inv).find(id => (inv[id] || 0) > 0 && B(id) && (B(id).adp || B(id).cat === 'Fuel tanks') && B(id).d2 != null && [B(id).d, B(id).d2].includes(from) && [B(id).d, B(id).d2].includes(to) && !(B(id).lf > 0 && B(id).cat !== 'Fuel tanks')) || null;
   if (J.d === 'r') { if (d.jet.n % 2) m.err = `${d.jet.n}× ${J.t} on the fuselage sides: an odd number pushes the plane sideways. Use a pair.`; else m.kind = 'radial'; }
@@ -2770,7 +2782,10 @@ async function designRocket() {
   const good = res.filter(x => !x.R.error);
   if (!good.length) { $('btnDesign').disabled = false; $('runBox').hidden = true; toast(res[0].R.error || 'No design found.', 5000); return; }
   // each search kept the best design it saw for every kind of "best": take whichever run found the better one
-  for (const o of good) { let bA = null; for (const q of good) { const a = q.R.alts && q.R.alts[o.ob]; if (a && (!bA || a.s > bA.s)) bA = a; } const own = o.R.r.ok ? O.objScore(o.ob, o.R.r) : -Infinity; if (bA && bA.s > own + 1e-6) o.R = Object.assign({}, o.R, { g: bA.g }); }
+  // pool every good design any run found (its winners and the best it saw for each kind of "best"), then give each option the one that scores best for it
+  const pool = [];
+  for (const q of good) { if (q.R.r.ok) pool.push({ g: q.R.g, r: q.R.r }); for (const a of Object.values(q.R.alts || {})) { const r = O.evaluate(a.g, goal, inv, false, Object.assign({}, lim, { objective: 'balance' })); if (r.ok) pool.push({ g: a.g, r }); } }
+  for (const o of good) { const res = x => x.r.margin >= Math.max(150, (x.r.need || 0) * (o.ob === 'balance' ? 0.10 : 0.05)); let b = null; for (const x of pool) if (res(x) && (!b || O.objScore(o.ob, x.r) > O.objScore(o.ob, b.r))) b = x; if (b && (!o.R.r.ok || O.objScore(o.ob, b.r) > O.objScore(o.ob, o.R.r) + 1e-6)) o.R = Object.assign({}, o.R, { g: b.g, r: b.r }); }
   // nothing made it: find out whether the buildings or the research are what's in the way
   let hint = null;
   if (!good.some(o => o.R.r.ok)) {
