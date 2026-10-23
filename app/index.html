@@ -517,7 +517,7 @@ function phasesOf0(goal) {
   if (B.cap) out.push({ k: 'orbit', name: `Capture at ${the(b)}`, dv: B.cap, body: b });
   out.push({ k: 'orbit', name: `Low orbit at ${the(b)}`, dv: B.low, body: b });
   const lands = mis === 'land' || mis === 'landReturn' || mis === 'base';
-  if (lands && B.land != null) out.push({ k: 'land', name: `Landing on ${the(b)}`, dv: B.descent != null ? B.descent : B.land, body: b, atm: B.atm || 0, chute: B.descent != null });
+  if (lands && B.land != null) out.push({ k: 'land', name: `Landing on ${the(b)}`, dv: Math.round((B.descent != null ? B.descent : B.land) * 1.15 + 50), body: b, atm: B.atm || 0, chute: B.descent != null }); // 15% + 50 m/s to hover, pick a flat spot and touch down gently
   if (mis === 'landReturn' || mis === 'orbitReturn') {
     if (mis === 'landReturn' && B.land != null) out.push({ k: 'ascent', name: `Ascent from ${the(b)}`, dv: B.land, body: b, atm: B.atm || 0 });
     // back the way it came; Kerbin's air does the braking at the end
@@ -682,6 +682,7 @@ function walk(segs, phases, opt = {}) {
     const m0 = mm;
     while (left > 1e-9 && mm > left * 0.0001) {
       if (opt.dropAt != null && !drop && pi >= opt.dropAt) { drop = opt.dropMass; mm -= drop; if (mm <= left) break; }
+      if (opt.landAt != null && pi >= opt.landAt && !sg.boost && sg.stage > opt.landMax) break; // a dedicated landing stage: whatever is below it drops before the descent, fuel and all
       const ph = phases[pi];
       const dm = Math.min(left, mm * 0.02);
       const atm = !ph ? 0 : ph.k === 'launch' ? Math.max(0, 1 - cumLaunch / 1400) : ph.k === 'ascent' && ph.atm ? ph.atm * Math.max(0, 1 - inPh / (ph.dv * 0.45)) : 0;
@@ -765,7 +766,8 @@ function evaluate(g, goal, inv, detail, lim) {
     asc = ascent(segs, area, pointed ? 0.3 : 0.5);
     phases[0] = Object.assign({}, phases[0], { dv: Math.min(9000, Math.max(2800, asc.dv)) + calOf(phases[0]) });
   }
-  const W = walk(segs, phases, { dropAt, dropMass });
+  const landAt = !LW && G.lands ? phases.findIndex(p => p.k === 'land') : -1;
+  const W = walk(segs, phases, { dropAt, dropMass, landAt: landAt >= 0 ? landAt : null, landMax: G.mission === 'landReturn' && g.stages.length >= 3 ? 1 : 0 });
   const { perSeg, fails, worst } = W;
   const need = W.need + (LW ? LW.need : 0);
   const margin = LW ? Math.min(W.margin, LW.margin) : W.margin;
@@ -872,7 +874,7 @@ function evaluate(g, goal, inv, detail, lim) {
       if (lph && lph.chute && V !== g && !Object.keys(V.fix || {}).some(id => B(id).chute)) stab.push(`The lander comes down through ${G.body}'s air: it needs its own parachute.`);
       if (!legId) stab.push(`No landing legs${V !== g ? ' on the lander' : ''}: it will land on the engine bell and tip over.`);
       else {
-        if (h / base > 3) stab.push(`The ${V !== g ? 'lander' : 'landing stage'} is ${h.toFixed(1)} m tall on a ${base.toFixed(1)} m footprint: it will tip over. Make it shorter and wider.`);
+        if (h / base > 2) stab.push(`The ${V !== g ? 'lander' : 'landing stage'} is ${h.toFixed(1)} m tall on a ${base.toFixed(1)} m footprint: it will tip over. Make it shorter and wider.`);
         const lk = Object.keys(VW.endMass).find(k => /^Landing/.test(k)), mT = lk ? VW.endMass[lk] : ls.m1, body = G.body, wt = mT * BODY[body].g;
         const cap = (LEGCAP[legId] || 30) * V.fix[legId] * 0.75; // one leg touches first: count three quarters of them
         if (wt > cap) stab.push(`${V.fix[legId]}× ${esc0(B(legId).t)} hold about ${cap.toFixed(0)} kN; the ${V !== g ? 'lander' : 'ship'} weighs ${wt.toFixed(0)} kN on ${body} at touchdown. Use more or bigger legs.`);
@@ -999,6 +1001,7 @@ function fixtures(goal, inv, cat) {
   const ph = phasesOf(goal), chuteLand = ph.some(p => p.chute);
   if (G.ret || G.body === 'Kerbin' || chuteLand) { const c = pick(p => p.chute && p.chute.full > 15); if (c[0]) fix[c[0]] = G.body === 'Eve' && inv[c[0]] >= 3 ? 3 : G.body === 'Duna' && inv[c[0]] >= 2 ? 2 : 1; }
   if (G.ret && isPlanet(G.body) || (G.ret && !['Kerbin', 'Mun', 'Minmus'].includes(BODY[G.body].parent))) { const hs = pick(p => p.shield)[0]; if (hs) fix[hs] = 1; }
+  if (G.ret) { const dc = pick(p => p.dec && !p.radial && p.d === 1.25)[0] || pick(p => p.dec && !p.radial)[0]; if (dc) fix[dc] = 1; } // under the pod: the service stage drops before re-entry, only the capsule comes home
   if (G.lands) { const l = pick(p => p.leg && !p.gear)[0]; if (l) fix[l] = Math.min(4, inv[l]) >= 3 ? Math.min(4, inv[l]) : 0; if (!fix[l]) delete fix[l]; }
   const fl = pick(p => p.rfin && inv[p.id] >= 3).sort((a, b) => BY[b].lift - BY[a].lift); if (fl[0]) fix[fl[0]] = Math.min(4, inv[fl[0]]); // the biggest fins you have
   // science experiments are the payload: everything you add goes along
@@ -1114,7 +1117,7 @@ function seedStages(g, goal, C, inv, variant) {
   const ph = phasesOf(goal), launchDv = ph[0] && ph[0].k === 'launch' ? 3500 : 0, rest = ph.slice(launchDv ? 1 : 0);
   const restDv = rest.reduce((a, p) => a + p.dv, 0) * 1.1, landG = Math.max(0, ...rest.filter(p => p.k === 'land' || p.k === 'ascent').map(p => BODY[p.body].g));
   const groups = [];
-  if (restDv > 0) { if (restDv > 2600 && landG) { const far = rest.filter(p => ['land', 'ascent'].includes(p.k) || /^Leave|Transfer to Kerbin|Escape|Rendezvous/.test(p.name) && rest.indexOf(p) > rest.findIndex(q => q.k === 'land')).reduce((a, p) => a + p.dv, 0) * 1.1; groups.push({ dv: far, twr: landG ? landG * 2.2 / 9.81 : 0.3 }, { dv: Math.max(300, restDv - far), twr: 0.3 }); } else groups.push({ dv: restDv, twr: landG ? landG * 2.2 / 9.81 : 0.3 }); }
+  if (restDv > 0) { if (landG) { const far = rest.filter(p => ['land', 'ascent'].includes(p.k) || /^Leave|Transfer to Kerbin|Escape|Rendezvous/.test(p.name) && rest.indexOf(p) > rest.findIndex(q => q.k === 'land')).reduce((a, p) => a + p.dv, 0) * 1.1; groups.push({ dv: far, twr: landG ? landG * 2.2 / 9.81 : 0.3 }, { dv: Math.max(300, restDv - far), twr: 0.3 }); } else groups.push({ dv: restDv, twr: landG ? landG * 2.2 / 9.81 : 0.3 }); }
   if (launchDv) groups.push({ dv: launchDv, twr: 1.45, launch: true });
   const fix = Object.entries(g.fix || {}).reduce((a, [id, n]) => a + BY[id].m * n, 0);
   let above = BY[g.cmd].m + fix + 0.2;
@@ -1223,7 +1226,7 @@ function optimize(inv, goal, opts = {}) {
   const must = (opts.must || []).filter(id => BY[id] && (inv[id] || 0) > 0);
   const mustCmd = must.find(id => BY[id].cmd);
   if (mustCmd) C.cmds = [mustCmd];
-  for (const id of must) { const p = BY[id]; if (!p.cmd && !(p.ta != null) && !(p.cat === 'Fuel tanks') && !p.dec && !p.sci) fix[id] = Math.max(fix[id] || 0, p.wing && !p.fin ? Math.min(4, Math.max(2, (inv[id] || 0) >= 4 ? 4 : 2)) : 1); }
+  for (const id of must) { const p = BY[id]; if (!p.cmd && !(p.ta != null) && !(p.cat === 'Fuel tanks') && !p.dec && !p.sci) fix[id] = Math.max(fix[id] || 0, p.wing && !p.fin ? Math.min(4, Math.max(2, (inv[id] || 0) >= 4 ? 4 : 2)) : (p.leg || p.rfin) ? ((inv[id] || 0) >= 4 ? 4 : 3) : p.chute && p.d === 'r' ? 2 : 1); } // parts that only work in a symmetric set (legs, fins, side chutes) come as a set: one leg can't hold a ship up
   const evalM = (g2, detail) => {
     const e = evaluate(g2, goal, inv, detail, opts.limits);
     const u = partsUsed(g2), miss = must.filter(id => !(u[id] > 0));
@@ -2240,9 +2243,11 @@ function buildPlan(R, opt = {}) {
       S('Landing', `Descend into ${body}'s air`, `Burn retrograde to put the periapsis about ${fmtN(Math.round(LOW[body] * 0.4))} km up${Object.keys(g.fix || {}).some(id => BY[id].shield) ? ', heat shield first' : ''}. Open the parachutes when their staging icon isn't red.${chuteTouch(body, tol)} Touch down under ${tol} m/s.`, { dv: dvOf(landName), stage: stg(landName) });
     } else {
       const acc = Math.max(0.1, (twrL - 1) * gB), brake = vOrb ** 2 / (2 * Math.max(0.1, twrL * gB)) / 1000;
+      { const lMax = G.mission === 'landReturn' && g.stages.length >= 3 ? 1 : 0, lower = !g.lander && (r.segs || []).some(sg => sg.stage > lMax && !sg.boost && Object.keys(sg.did).some(k => !/^Launch/.test(k)));
+        if (lower) { const ls = g.stages[lMax]; S('Landing', 'Drop the transfer stage', `Before the deorbit burn, stage away everything below the landing stage (the ${ls && BY[ls.eng] ? BY[ls.eng].t : 'engine'} with the legs), even if it still has fuel. Landing on a tall, heavy stack is how rockets tip over; the landing stage was sized to do the whole descent by itself.`); } }
       S('Landing', 'Deorbit burn', `Burn retrograde until the periapsis is about ${fmtN(Math.max(3, Math.round(LOW[body] / 3)))} km above the surface, just before the spot you want to land.`, { dv: 30 });
       S('Landing', 'Braking burn', `Hold retrograde (SAS) and burn full throttle${twrL > 0.5 ? ` when you are about ${fmtN(Math.max(1, brake), 1)} km from the ground track ahead (the lander has a TWR of about ${fmtN(twrL, 1)} on ${the})` : ' as you come down'}. Kill the sideways speed first, then come down slowly.${twrL && twrL < 2 ? ' Low TWR: start the burn early.' : ''}`, { dv: dvOf(landName) - 30, stage: stg(landName) });
-      S('Landing', 'Touchdown', legId ? `Legs down (G). Last 100 m at about 10 m/s, touch down under ${tol} m/s: the ${BY[legId].t} legs break above that (KSP wiki impact tolerance). Throttle to zero the moment you land.` : `This craft has no landing legs: touch down as gently as you can (under ${tol} m/s).`); void acc;
+      S('Landing', 'Touchdown', legId ? `Legs down (G). Pick flat ground: avoid crater walls and slopes. Below 1 km come down at about 20 m/s, last 100 m at under 10 m/s, and kill sideways drift first (SAS on retrograde, then radial out once you are nearly hovering). Touch down under ${tol} m/s: the ${BY[legId].t} legs break above that (KSP wiki impact tolerance). Throttle to zero the moment you land; the landing stage carries spare fuel for hovering while you line up.` : `This craft has no landing legs: touch down as gently as you can (under ${tol} m/s).`); void acc;
     }
     S('Surface', 'On the surface', crewed ? 'Crew report, EVA report, surface sample, plant a flag; run the experiments. Back inside before you lift off.' : 'Run the experiments and transmit or keep the data.');
     if (G.ret) {
@@ -2271,7 +2276,7 @@ function buildPlan(R, opt = {}) {
     const ch = Object.entries(g.fix || {}).filter(([id]) => BY[id].chute), hs = Object.keys(g.fix || {}).find(id => BY[id].shield);
     const mDown = BY[g.cmd].m + Object.entries(g.fix || {}).reduce((q, [id, n]) => q + BY[id].m * n, 0), A = ch.reduce((q, [id, n]) => q + Math.PI * (BY[id].chute.full / 2) ** 2 * n, 0);
     const vTouch = A ? Math.sqrt(2 * mDown * 1000 * 9.81 / (1.225 * 1.1 * A)) : null; // fully open canopy diameter from the wiki's Parachute page
-    S('Re-entry', 'Re-entry', `Before the air (70 km): drop everything but the capsule${hs ? `, ${BY[hs].t} facing forward` : ''}, SAS to retrograde. Periapsis about 30 km.`);
+    { const dc = Object.keys(g.fix || {}).find(id => BY[id].dec && !BY[id].radial); S('Re-entry', 'Re-entry', `Before the air (70 km): fire the ${dc ? BY[dc].t + ' under the capsule' : 'decoupler under the capsule'} so only the capsule comes home${hs ? `, ${BY[hs].t} facing forward` : ''}, then SAS to retrograde. Periapsis about 30 km${hs ? '' : ' (a gentle angle keeps the capsule cool)'}. Keep the parachutes in their own last stage so they can't open early.`); }
     if (ch.length) S('Re-entry', 'Parachutes', `Stage 0 when the parachute icon turns from red to grey or yellow-green (below about 250 m/s for main chutes). They open fully at 1,000 m. ${vTouch ? `Expected touchdown about ${fmtN(vTouch, 1)} m/s${vTouch > 8 ? ' — fast: add a chute' : ''}.` : ''}`, { stage: 0 });
     S('Re-entry', 'Recover', `Recover the vessel for funds and science${crewed ? ' (the crew earns experience)' : ''}.`);
   }
@@ -3031,6 +3036,106 @@ root.SHIP_VIZ = { draw };
 
 </script>
 <script>
+// Mission Companion · reading KSP .craft files (the text files in Ships/VAB and Ships/SPH), so rockets you flew can teach the network
+(function (root) {
+  'use strict';
+  const P = root.SHIP_PARTS || (typeof require !== 'undefined' ? require('./parts.js') : null), BY = P.BY;
+  // the game's internal part names (from the part.cfg files) → this app's parts
+  const NAMES = {"sensorBarometer":"baro","RAPIER":"rapier","cupola":"cupola","rtg":"rtg","rcsTankRadialLong":"stratC","Large.Crewed.Lab":"mpl","sensorAccelerometer":"seismic","ramAirIntake":"ramp","sensorGravimeter":"gravioli","GooExperiment":"goo","science.module":"scijr","sensorThermometer":"thermo","Size3AdvancedEngine":"rhino","omsEngine":"puff","MassiveBooster":"kickback","Size3EngineCluster":"mammoth","crewCabin":"hitchhiker","landerCabinSmall":"landerSmall","winglet":"avt1","winglet3":"deltadeluxe","noseCone":"noseCone","R8winglet":"avr8","nuclearEngine":"nerv","solidBooster1-1":"thumper","toroidalAerospike":"dart","radialLiquidEngine1-2":"thud","solarPanels2":"spl","solarPanels5":"oxstat","batteryPack":"z100","batteryBankLarge":"z4k","batteryBankMini":"z200","solarPanels4":"ox4l","largeSolarPanel":"gigantor","ksp.r.largeBatteryPack":"z400","batteryBank":"z1k","airScoop":"xmg50","parachuteLarge":"mk16xl","dockingPort2":"port","parachuteSingle":"mk16","radialDecoupler":"tt38k","miniLandingLeg":"lt05","landingLeg1-2":"lt2","radialDecoupler2":"tt70","longAntenna":"comm16","landingLeg1":"lt1","dockingPort1":"portSh","parachuteRadial":"mk2r","parachuteDrogue":"mk25","radialRCSTank":"stratR","miniFuelTank":"oscarB","adapterMk3-Size2":"mk3to25","adapterMk3-Mk2":"mk3toMk2","mk3Cockpit.Shuttle":"cockpitMk3","mk2DroneCore":"mk2drone","mk2Cockpit.Standard":"cockpitMk2","tailfin":"tailfin","sweptWing":"swept","CanardController":"canard","AdvancedCanard":"canardAdv","HeatShield1":"hs125","HeatShield2":"hs25","wingShuttleElevon1":"bigSelevon1","wingShuttleElevon2":"bigSelevon2","wingShuttleDelta":"bigSdelta","wingShuttleRudder":"bigStail","wingShuttleStrake":"bigSstrake","structuralWing":"structA","structuralWing2":"structB","StandardCtrlSrf":"elevon1","elevon3":"elevon3","structuralWing4":"structD","delta.small":"deltaS","sweptWing2":"sweptB","wingConnector2":"connB","wingConnector3":"connC","deltaWing":"delta","wingConnector5":"connE","structuralWing3":"structC","elevon5":"elevon5","wingConnector":"connA","sweptWing1":"sweptA","wingConnector4":"connD","wingStrake":"strake","elevon2":"elevon2","CircularIntake":"circular","airlinerMainWing":"fat455","airlinerTailFin":"fat455tail","noseConeAdapter":"ncs","standardNoseCone":"noseConeS","GearMedium":"ly60","GearSmall":"ly35","GearFree":"ly05","GearFixed":"ly01","sensorAtmosphere":"afsv","radialDrogue":"mk12r","MK1Fuselage":"mk1lf","MK1IntakeFuselage":"dsi","mk2SpacePlaneAdapter":"mk2to125","mk3FuselageLFO.25":"mk3lfoS","mk3FuselageLFO.100":"mk3lfoL","mk3FuselageLF.50":"mk3lf","mk3FuselageLF.25":"mk3lfS","mk3FuselageLFO.50":"mk3lfo","mk3FuselageLF.100":"mk3lfL","mk2FuselageLongLFO":"mk2lfo","mk2Fuselage":"mk2lf","mk2FuselageShortLFO":"mk2lfoS","mk2FuselageShortLiquid":"mk2lfS","basicFin":"basicfin","shockConeIntake":"shockcone","miniIntake":"circularS","turboFanSize2":"goliath","turboJet":"panther","miniFuselage":"mk0lf","miniJetEngine":"juno","MK1CrewCabin":"mk1cabin","ScienceBox":"esu","SmallGearBay":"ly10","mk1-3pod":"mk1-3pod","externalTankRound":"r4","externalTankCapsule":"r11","externalTankToroid":"r12","Magnetometer":"magneto","Thoroughbred":"thoroughbred","Clydesdale":"clydesdale","Shrimp":"shrimp","Mite":"mite","engineLargeSkipper.v2":"skipper","liquidEngineMainsail.v2":"mainsail","probeCoreHex.v2":"hecs","DeployedWeatherStn":"weather","Decoupler.0":"td06","Decoupler.1":"td12","Decoupler.2":"td25","Decoupler.3":"td37","stackBiCoupler.v2":"tvr200","mk1pod.v2":"mk1pod","mk2LanderCabin.v2":"landerMk2","Mark1Cockpit":"cockpitMk1","Mark2Cockpit":"cockpitMk1i","HECS2.ProbeCore":"hecs2","probeCoreOcto.v2":"okto","fuelTankSmallFlat":"flt100","fuelTankSmall":"flt200","fuelTank":"flt400","fuelTank.long":"flt800","Size3To2Adapter.v2":"kerbodyneAdp","Size3LargeTank":"s3-14400","Size3SmallTank":"s3-3600","Size3MediumTank":"s3-7200","Rockomax64.BW":"jumbo64","Rockomax16.BW":"x200-16","Rockomax32.BW":"x200-32","Rockomax8BW":"x200-8","JetEngine":"wheesley","turboFanEngine":"whiplash","solidBooster.v2":"hammer","solidBooster.sm.v2":"flea","smallRadialEngine.v2":"twitch","liquidEngineMini.v2":"spark","Size2LFB.v2":"twinboar","microEngine.v2":"ant","radialEngineMini.v2":"spider","liquidEngine3.v2":"terrier","liquidEngine.v2":"reliant","liquidEngine2.v2":"swivel","liquidEngine2-2.v2":"poodle","SSME":"vector","linearRcs":"pa7","RCSBlock.v2":"rv105","adapterSmallMiniTall":"fla10","largeAdapter":"rockomaxAdp","stackTriCoupler.v2":"tvr1180c","adapterLargeSmallBi":"tvr200l","stackQuadCoupler":"tvr2160c","adapterLargeSmallTri":"tvr300l","adapterLargeSmallQuad":"tvr400l","nacelleBody":"nacelle","radialEngineBody":"precooler","rocketNoseCone.v3":"noseCone25"};
+  const ALIAS = { liquidEngine: 'reliant', liquidEngine2: 'swivel', liquidEngine3: 'terrier', solidBooster: 'hammer', mk1pod: 'mk1pod', fuelTank: 'flt400', 'fuelTank.long': 'flt800' };
+  const idOf = n => NAMES[n] || NAMES[n + '.v2'] || NAMES[n.replace(/\.v2$/, '')] || ALIAS[n] || ALIAS[n.replace(/\.v2$/, '')] || null;
+  const strip = ref => String(ref || '').trim().replace(/_\d+$/, '');
+  function parse(text) {
+    const lines = String(text).replace(/\r/g, '').split('\n'), parts = [], meta = {};
+    let depth = 0, cur = null;
+    for (const raw of lines) {
+      const l = raw.trim(); if (!l) continue;
+      if (l === '{') { depth++; continue; }
+      if (l === '}') { depth--; if (depth === 0) cur = null; continue; }
+      if (depth === 0 && l === 'PART') { cur = { links: [], attN: [], sym: [], srf: null }; parts.push(cur); continue; }
+      const m = l.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/); if (!m) continue;
+      const [, k, v] = m;
+      if (!cur) { if (depth === 0) meta[k] = v; continue; }
+      if (depth !== 1) continue; // modules, resources, events
+      if (k === 'part') { cur.ref = v.trim(); cur.name = strip(v); cur.id = idOf(cur.name); }
+      else if (k === 'pos') cur.pos = v.split(',').map(Number);
+      else if (k === 'link') cur.links.push(v.trim());
+      else if (k === 'attN') { const [node, ref] = v.split(','); cur.attN.push([node.trim(), (ref || '').trim()]); }
+      else if (k === 'srfN') { const [, ref] = v.split(','); cur.srf = (ref || '').trim(); }
+      else if (k === 'sym') cur.sym.push(v.trim());
+      else if (k === 'istg') cur.istg = +v;
+    }
+    return { meta, parts };
+  }
+  // the craft as this app's rocket: the stack from the pod down split into stages at each decoupler, strap-on boosters as rings, the rest as extras
+  function toDesign(text) {
+    const { meta, parts } = parse(text), notes = [], unknown = new Set();
+    if (!parts.length) return { error: 'That doesn\'t look like a KSP .craft file (no PART sections).' };
+    const byRef = new Map(parts.map(p => [p.ref, p])), parent = new Map();
+    for (const p of parts) for (const c of p.links) parent.set(c, p.ref);
+    for (const p of parts) if (!p.id) unknown.add(p.name);
+    const isSrf = p => p.srf && p.srf === parent.get(p.ref);
+    // the column: everything joined to the first part through stack nodes
+    const root0 = parts.find(p => !parent.has(p.ref)) || parts[0], col = new Set(), q = [root0];
+    while (q.length) { const p = q.pop(); if (col.has(p.ref)) continue; col.add(p.ref); for (const c of p.links) { const C = byRef.get(c); if (C && !isSrf(C)) q.push(C); } }
+    const y = p => (p.pos ? p.pos[1] : 0), axis = p => !p.pos || Math.hypot(p.pos[0], p.pos[2]) < 0.6;
+    const column = parts.filter(p => col.has(p.ref)).sort((a, b) => y(b) - y(a));
+    const cmdP = column.find(p => p.id && BY[p.id].cmd) || parts.find(p => p.id && BY[p.id].cmd);
+    if (!cmdP) return { error: 'No command pod, cockpit or probe core that this app knows was found.', unknown: [...unknown] };
+    const g = { cmd: cmdP.id, fix: {}, stages: [] }, stageOf = new Map(), addFix = (id, n = 1) => { g.fix[id] = (g.fix[id] || 0) + n; };
+    let st = null, seenCmd = false;
+    const close = () => { if (st) g.stages.push(st); st = null; };
+    for (const p of column) {
+      if (p === cmdP) { seenCmd = true; st = { eng: null, n: 0, tanks: [], dec: null }; stageOf.set(p.ref, 0); continue; }
+      const B = p.id ? BY[p.id] : null;
+      if (!B) continue;
+      if (!seenCmd) { if (!B.cmd) addFix(p.id); continue; } // parachutes, nose cones, docking ports above the pod
+      if (B.dec && !B.radial) {
+        if (!st.eng && !st.tanks.length && !g.stages.length) { addFix(p.id); stageOf.set(p.ref, 0); continue; } // right under the pod: the capsule decoupler
+        close(); st = { eng: null, n: 0, tanks: [], dec: p.id };
+      } else if (B.cat === 'Fuel tanks' && B.d !== 'r') st.tanks.push(p.id);
+      else if (B.ta != null && !B.jet) { if (!st.eng || st.eng === p.id) { st.eng = p.id; st.n++; } else notes.push(`Two kinds of engine on one stage (${B.t} and ${BY[st.eng].t}): kept the ${BY[st.eng].t}.`); }
+      else if (B.shield) addFix(p.id);
+      else if (B.adp || B.cpl || B.cone) { /* adapters and couplers are worked out again */ }
+      else addFix(p.id);
+      stageOf.set(p.ref, g.stages.length);
+    }
+    close();
+    // engines and boosters hung on the side
+    const done = new Set(), rings = [];
+    const subtree = p => { const out = [], s = [p]; while (s.length) { const x = s.pop(); out.push(x); for (const c of x.links) { const C = byRef.get(c); if (C) s.push(C); } } return out; };
+    for (const p of parts) {
+      if (col.has(p.ref) || done.has(p.ref) || !isSrf(p) || !col.has(parent.get(p.ref))) continue;
+      const B = p.id ? BY[p.id] : null, group = [p, ...p.sym.map(r => byRef.get(r)).filter(Boolean)]; group.forEach(x => done.add(x.ref));
+      const k = group.length, si = stageOf.has(parent.get(p.ref)) ? stageOf.get(parent.get(p.ref)) : g.stages.length - 1;
+      if (!B) continue;
+      if (B.dec && B.radial) { // a strap-on booster: radial decoupler, then tanks and an engine or a solid motor
+        const sub = subtree(p).slice(1).filter(x => x.id); sub.forEach(x => done.add(x.ref)); group.slice(1).forEach(gp => subtree(gp).forEach(x => done.add(x.ref)));
+        const eng = sub.find(x => BY[x.id].ta != null), tanks = sub.filter(x => BY[x.id].cat === 'Fuel tanks').sort((a, b) => y(b) - y(a)).map(x => x.id), cone = sub.find(x => BY[x.id].cone);
+        if (eng) rings.push({ k, unit: eng.id, tanks, dec: p.id, cone: cone ? cone.id : null, cross: false, stage: si });
+        else notes.push(`A side part on ${BY[p.id].t} has no engine: left out.`);
+        if (si !== g.stages.length - 1) notes.push(`Boosters on an upper stage were counted on the bottom stage.`);
+      } else if (B.ta != null && !B.jet && g.stages[si]) { const s0 = g.stages[si]; if (!s0.eng) { s0.eng = p.id; s0.n = k; } else if (s0.eng === p.id) s0.n += k; else for (const x of group) addFix(x.id); }
+      else if (B.cat === 'Fuel tanks' && g.stages[si]) { for (const x of group) g.stages[si].tanks.push(x.id); }
+      else for (const x of group) if (x.id) addFix(x.id);
+      // anything hanging off those side parts (fins on boosters, etc.)
+      for (const gp of group) for (const x of subtree(gp).slice(1)) if (!done.has(x.ref)) { done.add(x.ref); if (x.id && !(BY[x.id].dec && BY[x.id].radial)) addFix(x.id); }
+    }
+    if (rings.length) g.rings = rings.map(({ stage, ...r }) => r);
+    g.stages = g.stages.filter(s => s.eng || s.tanks.length);
+    if (g.stages.length) g.stages[0].dec = null;
+    for (const s of g.stages) if (!s.eng) notes.push('A stage with tanks but no engine of its own: it was kept, but the app may read it differently from the game.');
+    for (const s of g.stages) if (!s.n) s.n = 1;
+    if (!g.stages.length) return { error: 'Couldn\'t find any engines this app knows on the craft.', unknown: [...unknown] };
+    const crew = !!BY[g.cmd].crew;
+    return { g, name: meta.ship || 'Craft', type: meta.type || 'VAB', crew, unknown: [...unknown], notes };
+  }
+  const api = { parse, toDesign, idOf };
+  if (typeof module !== 'undefined') module.exports = api; else root.CRAFT = api;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+<script>
 // Mission Companion · pictures of the "thinking": the network's guess and the search that checks it
 (function (root) {
   'use strict';
@@ -3311,6 +3416,7 @@ async function designRocket() {
   let done = 0;
   const show = n => { const f = Math.min(1, n / tgt()), el = (Date.now() - t0) / 1000, left = f > 0.03 ? el / f - el : null; $('runBar').style.width = (f * 100) + '%'; $('runNote').textContent = `Tested ${fmt(n)} of ${fmt(tgt())} designs on ${getPool().length || 1} core${(getPool().length || 1) > 1 ? 's' : ''}${left != null ? ` · about ${left > 90 ? fmt(left / 60) + ' min' : fmt(left) + ' s'} left` : ''}`; };
   const must = (d.must || []).filter(id => inv[id] > 0), seeds = seedsFor(goal, crew, inv);
+  if (must.some(id => BY[id].leg) && !O.goalInfo(goal).lands) toast('Landing legs only help on a Land mission. Pick Land (or Land and come back) to get a proper landing stage with a full set of legs.', 7000);
   const th = NNOK && !st.nnOff ? NNET.think(inv, goal, crew, lim) : null, S = searchTracker(), nW = getPool().length || 1;
   $('thinkWrap').hidden = !th; if (th) THINK.animateNet($('thinkNet'), th, thinkLinks(th));
   for (const ob of objs) { S.base = done / nW; const R = await runPool(inv, goal, { limits: lim, objective: ob, crewed: crew, must, seeds }, part, (n, info) => { show(done + n); S.tick(info, $('thinkSearch')); }); done += R.tested || part; res.push({ ob, R }); }
@@ -3648,7 +3754,7 @@ function reportFlight(m, j, left) {
 const TR = { run: false, curve: [], log: [] };
 const PRACTICE = ['Kerbin:orbit', 'Mun:flyby', 'Mun:orbit', 'Mun:land', 'Mun:landReturn', 'Minmus:flyby', 'Minmus:orbit', 'Minmus:land', 'Minmus:landReturn', 'Mun:orbitReturn', 'Duna:flyby', 'Duna:orbit', 'Duna:land', 'Ike:land', 'Eve:orbit', 'Gilly:land', 'Duna:landReturn', 'Moho:orbit', 'Dres:orbit', 'Jool:orbit', 'Laythe:orbit', 'Eeloo:orbit'];
 function openTrain() {
-  let el = $('trainBox'); if (!el) { el = document.createElement('div'); el.id = 'trainBox'; document.body.appendChild(el); el.addEventListener('click', trainClick); }
+  let el = $('trainBox'); if (!el) { el = document.createElement('div'); el.id = 'trainBox'; document.body.appendChild(el); el.addEventListener('click', trainClick); el.addEventListener('change', trainChange); }
   el.hidden = false; renderTrain();
 }
 function renderTrain() {
@@ -3661,16 +3767,46 @@ function renderTrain() {
   <label class="note" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="trB" checked style="width:auto"> Only with my buildings' limits</label>
   <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-trstart ${TR.run ? 'disabled' : ''}>Start practising</button><button class="btn" data-trstop ${TR.run ? '' : 'disabled'}>Stop</button></div>
   <p class="note" id="trNote" style="margin:8px 0 0">${TR.run ? 'Practising…' : 'Keep the app open while it practises. You can stop at any time; it keeps what it learned.'}</p></div>
+  <div class="card"><h3 style="margin-top:0">Teach it with your own crafts</h3><p class="note" style="margin:0 0 8px">Pick .craft files of rockets that really did the job in KSP (on your PC they're in the game folder under <b>saves/&lt;your save&gt;/Ships/VAB</b>; copy them to the phone first). Say which mission each one completed and the network learns from it, with extra weight because it flew.</p>
+  <input type="file" id="craftIn" multiple accept="*/*" style="width:100%">
+  <details style="margin-top:6px"><summary class="note">…or paste a craft file's text</summary><textarea id="craftTxt" rows="4" style="width:100%;margin-top:6px" placeholder="ship = My Rocket&#10;version = 1.12.5&#10;PART&#10;{ …"></textarea><button class="btn small" data-craftpaste style="margin-top:6px">Read it</button></details>
+  <div id="craftList">${craftListHtml()}</div></div>
   <div class="card think"><p class="note" style="margin:0"><b>Its first guess</b> for the current practice mission</p><canvas id="trNet"></canvas>
   <p class="note" style="margin:10px 0 0"><b>The search checking it</b></p><canvas id="trSearch"></canvas>
   <p class="note" style="margin:10px 0 0"><b>Is it learning?</b> How often its first guess matched what the search found</p><canvas id="trCurve"></canvas>
   <ul class="checks" id="trLog" style="margin-top:8px">${TR.log.slice(-8).reverse().map(t => `<li class="${t.ok ? 'ok' : ''}">${t.txt}</li>`).join('')}</ul></div>`;
   THINK.drawCurve($('trCurve'), TR.curve); if (TR.th) THINK.drawNet($('trNet'), TR.th, thinkLinks(TR.th)); if (TR.S) THINK.drawSearch($('trSearch'), TR.S);
 }
+const MISN = { flyby: 'Flyby', orbit: 'Orbit', land: 'Land', landReturn: 'Land and come back', orbitReturn: 'Orbit and come back' };
+function craftListHtml() {
+  const L = TR.crafts || []; if (!L.length) return '';
+  return L.map((c, i) => { if (c.error) return `<div class="verdict bad" style="margin-top:8px"><b>${esc(c.file)}</b>${esc(c.error)}${c.unknown && c.unknown.length ? ` Parts it doesn't know: ${esc(c.unknown.slice(0, 6).join(', '))}.` : ''}</div>`;
+    const g = c.g, desc = g.stages.map((s, k) => `${s.n > 1 ? s.n + '× ' : ''}${BY[s.eng] ? BY[s.eng].t.replace(/ Liquid Fuel Engine| Solid Fuel Booster/, '') : '?'} + ${s.tanks.length} tank${s.tanks.length === 1 ? '' : 's'}`).join(' / ') + (g.rings || []).map(r => ` · ${r.k}× ${BY[r.unit].t.replace(/ Solid Fuel Booster| Liquid Fuel Engine/, '')} boosters`).join('');
+    const [b, m] = c.goal.split(':');
+    return `<div class="card" style="background:var(--panel2);margin:8px 0 0"><b>${esc(c.name)}</b> <span class="note">${esc(c.file)}</span><p class="note" style="margin:4px 0">${esc(BY[g.cmd].t)} · ${esc(desc)}${c.unknown.length ? `<br>Not counted (parts this app doesn't model): ${esc(c.unknown.slice(0, 8).join(', '))}${c.unknown.length > 8 ? '…' : ''}` : ''}${c.notes.length ? `<br>${esc(c.notes[0])}` : ''}</p>
+      <div style="display:flex;gap:6px"><select data-cbody="${i}" style="flex:1">${Object.keys(O.BODY).map(x => `<option${x === b ? ' selected' : ''}>${x}</option>`).join('')}</select><select data-cmis="${i}" style="flex:1">${(b === 'Kerbin' ? ['orbit'] : Object.keys(MISN)).map(x => `<option value="${x}"${x === m ? ' selected' : ''}>${MISN[x]}</option>`).join('')}</select></div>
+      ${c.check ? `<p class="note" style="margin:6px 0 0">The app's model gives it ${c.check.ok ? `<b>${fmt(c.check.margin)} m/s to spare</b>` : c.check.margin < 0 ? `<b>${fmt(-c.check.margin)} m/s short</b> (if it really made it, the network still learns from it; a flight report in a mission corrects the model)` : 'a failed check: ' + esc((c.check.stab || [])[0] || '')} for this mission.</p>` : ''}
+      <button class="btn small ${c.taught ? '' : 'primary'}" data-cteach="${i}" style="margin-top:6px" ${c.taught ? 'disabled' : ''}>${c.taught ? 'Learned ✓' : 'It did this mission: learn from it'}</button></div>`; }).join('');
+}
+function craftCheck(c) { try { const inv = inventory(); for (const [id, n] of Object.entries(O.partsUsed(c.g))) inv[id] = Math.max(inv[id] || 0, n); c.inv = inv; c.check = O.evaluate(c.g, c.goal, inv, false, Object.assign({}, limits('rocket'), { objective: 'balance' })); } catch (e) { c.check = null; } }
+function addCraft(file, text) {
+  const R = CRAFT.toDesign(text), c = Object.assign({ file }, R);
+  if (!R.error) { const legs = Object.keys(R.g.fix).some(id => BY[id].leg), chute = Object.keys(R.g.fix).some(id => BY[id].chute); c.goal = legs ? (chute ? 'Mun:landReturn' : 'Mun:land') : chute ? 'Mun:orbitReturn' : 'Mun:orbit'; craftCheck(c); }
+  (TR.crafts = TR.crafts || []).push(c); const el = $('craftList'); if (el) el.innerHTML = craftListHtml();
+}
 function trainClick(e) {
   if (e.target.closest('[data-trclose]')) { $('trainBox').hidden = true; if (st.view === 'career') renderCareer(); return; }
   if (e.target.closest('[data-trstop]')) { TR.run = false; $('trNote').textContent = 'Stopping after this mission…'; return; }
   if (e.target.closest('[data-trstart]')) practice(+$('trN').value, $('trB').checked);
+  if (e.target.closest('[data-craftpaste]')) { const t = $('craftTxt').value; if (t.trim()) { addCraft('pasted', t); $('craftTxt').value = ''; } return; }
+  const ct = e.target.closest('[data-cteach]'); if (ct) { const c = TR.crafts[+ct.dataset.cteach]; if (!c || c.taught) return;
+    for (let k = 0; k < 3; k++) addSample(c.inv || inventory(), c.goal, c.crew, limits('rocket'), c.g); // it flew: three times the weight of a practice answer
+    remember(c.goal, c.crew, [c.g]); c.taught = true; $('craftList').innerHTML = craftListHtml(); $('trNote').textContent = 'Learning from your craft…';
+    trainNet(nnSamples.slice(-400), 4).then(q => { $('trNote').textContent = q ? `Learned from ${c.name}. On the examples it has seen, its first guess now matches ${Math.round(q.score * 100)}% of the big choices.` : 'Saved.'; }); }
+}
+function trainChange(e) {
+  if (e.target.id === 'craftIn') { for (const f of e.target.files || []) { const rd = new FileReader(); rd.onload = () => addCraft(f.name, String(rd.result)); rd.readAsText(f); } e.target.value = ''; return; }
+  const cb = e.target.closest('[data-cbody],[data-cmis]'); if (cb) { const i = +(cb.dataset.cbody || cb.dataset.cmis), c = TR.crafts[i]; const b = document.querySelector(`[data-cbody="${i}"]`).value; let m = document.querySelector(`[data-cmis="${i}"]`).value; if (b === 'Kerbin') m = 'orbit'; c.goal = b + ':' + m; craftCheck(c); $('craftList').innerHTML = craftListHtml(); }
 }
 async function practice(n, ownLim) {
   if (!NNOK) return; TR.run = true; renderTrain();
@@ -3807,6 +3943,8 @@ function vabHtml(R) {
   const sym = (n) => n > 1 ? `Set symmetry to ${n}× and attach` : 'Attach';
   st.push(`Start a new rocket with the <b>${esc(B(g.cmd).t)}</b>.`);
   for (const [id] of fix.filter(([id]) => B(id).chute && B(id).d !== 'r')) st.push(`Attach the <b>${esc(B(id).t)}</b> to the top of the pod.`);
+  for (const [id] of fix.filter(([id]) => B(id).shield)) st.push(`Attach the <b>${esc(B(id).t)}</b> under the pod (it's the bottom of the capsule on the way home).`);
+  for (const [id] of fix.filter(([id]) => B(id).dec && !B(id).radial)) st.push(`Attach the <b>${esc(B(id).t)}</b> under ${fix.some(([x]) => B(x).shield) ? 'the heat shield' : 'the pod'}: before re-entry it drops everything except the capsule, so only the capsule and its parachute come home.`);
   { // station modules go on top of the probe core, bottom to top: batteries, monoprop, habitats and labs, hub, docking port last
     const ORD = { battery: 0, power: 1, mono: 2, hab: 3, hub: 4, port: 5 }, stk = fix.filter(([id]) => B(id).stn && B(id).d !== 'r').sort((x, y) => (ORD[B(x[0]).stn] ?? 3) - (ORD[B(y[0]).stn] ?? 3));
     let w = B(g.cmd).d;
@@ -3829,12 +3967,10 @@ function vabHtml(R) {
   });
   { const bs = g.stages[g.stages.length - 1], bt = bs && bs.tanks.length ? B(bs.tanks[bs.tanks.length - 1]).t : bs && bs.eng && B(bs.eng).srb ? B(bs.eng).t : null;
     for (const [id, n] of fix.filter(([id]) => B(id).rfin || B(id).wing)) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> on the ${bt ? `bottom ${esc(bt)}` : 'bottom tank'}, their back edges level with its lower end, just above the ${bs && !bs.tanks.length && bs.eng && B(bs.eng).srb ? 'nozzle' : 'engine'} (not on the engine or nozzle itself). Rotate them so they line up with the boosters or sit between them.`); }
-  for (const [id, n] of fix.filter(([id]) => B(id).leg)) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> around the stage that lands.`);
+  { const gi = O.goalInfo(R.goal || ''), lMax = gi.mission === 'landReturn' && g.stages.length >= 3 ? 1 : 0, ls = g.stages[lMax], lt = ls && ls.tanks.length ? B(ls.tanks[ls.tanks.length - 1]).t : null; for (const [id, n] of fix.filter(([id]) => B(id).leg)) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> around the <b>landing stage</b>${lt ? ` (low on the ${esc(lt)}, just above the ${esc(B(ls.eng).t)})` : ''}, spread evenly so their feet reach past the engine bell. That stage does the whole descent on its own.`); }
   for (const [id, n] of fix.filter(([id]) => B(id).chute && B(id).d === 'r')) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> on the pod.`);
-  for (const [id] of fix.filter(([id]) => B(id).shield)) st.push(`Attach the <b>${esc(B(id).t)}</b> under the pod (it's the bottom of the capsule on the way home).`);
   const rad = fix.filter(([id]) => (B(id).sci || B(id).stn) && B(id).d === 'r');
   if (rad.length) st.push(`Surface-attach ${rad.map(([id, n]) => `${n}× ${esc(B(id).t)}`).join(', ')} on the pod or top stage.`);
-  if (g.fix && Object.keys(g.fix).some(id => B(id).chute) && g.stages.length) st.push('Recommended: a small decoupler between the pod and the top stage, so only the capsule re-enters.');
   return `<div class="card"><h3>Build it in the VAB</h3><ol class="steps">${st.map(x => `<li>${x}</li>`).join('')}</ol></div>`;
 }
 function landerHtml(R) {
