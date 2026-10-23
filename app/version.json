@@ -1,8 +1,8 @@
 {
-  "web": 49,
+  "web": 50,
   "apk": 4,
-  "sha256": "2f993975398e06851fcb405b83bb3616a6a4953af838eac451baf143f468540c",
-  "notes": "Game data from the part configs (sizes, heights, colours, couplers, intakes, jet curves), booster stages and rocket-only spaceplanes, 'Parts it must use' picker, fins on the bottom tank, sensible station stacking, planet air from the wiki",
+  "sha256": "e58d74092a9c6cfe14e59b5a235b59bcc3762693b57a19ca65e5a604094bd2b1",
+  "notes": "Fins go on the solid booster's casing when the bottom stage is a booster",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2

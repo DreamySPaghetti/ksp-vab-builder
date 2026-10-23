@@ -2564,7 +2564,7 @@ function rocket(g, M, R) {
     }
     side.forEach((t, k) => { const a = k / Math.max(1, side.length) * Math.PI * 2, m = mesh(g, new THREE.CylinderGeometry(.25, .25, Math.max(.4, t.h), 24), M.tankWhite, Math.cos(a) * (tr + .25), tankTop - t.h / 2 - .2, Math.sin(a) * (tr + .25)); void m; });
     tankBot = y; // fins go on the tank, ending where the engine starts
-    if (s.eng) y -= engine(g, M, B(s.eng), y, s.n, tr);
+    if (s.eng) { const E = B(s.eng); if (!ts.length && E.srb) tankBot = y - E.h * .85; y -= engine(g, M, E, y, s.n, tr); } // a solid booster stage: fins go on the booster's own casing, above its nozzle
     if (i === 0 && lands) landY = y;
     if (i === d.stages.length - 1) { const RG = d.rings || (d.boost ? [d.boost] : []); RG.forEach((b, ri) => {
       const u = B(b.unit), br = rad(u.d === 'r' ? 0.625 : u.d), off = tr + br + .12 + ri * 0.05;
@@ -2579,6 +2579,7 @@ function rocket(g, M, R) {
         const strut = mesh(g, new THREE.BoxGeometry(off - tr, .25, .2), b.cross ? M.orange : M.hazard, Math.cos(a) * (tr + (off - tr) / 2), Math.min(tankTop - 1, y + blen - 1), Math.sin(a) * (tr + (off - tr) / 2)); strut.rotation.y = -a;
       }
     }); }
+    if (!ts.length && s.eng && B(s.eng).srb) tr = rad(B(s.eng).d);
     lastR = tr; bottomY = y;
   });
   for (const [id, n] of fix) {
@@ -3307,8 +3308,8 @@ function vabHtml(R) {
   O.ringsOf(g).forEach((b, ri, all) => {
     st.push(`${all.length > 1 ? `Booster ring ${ri + 1}${ri === 0 ? ' (the outer one, it drops first)' : ''}: ` : ''}${sym(b.k)} ${b.k}× <b>${esc(B(b.dec).t)}</b> low on the ${esc(lastTank || 'bottom tank')}; on each, ${b.cone ? `a <b>${esc(B(b.cone).t)}</b> on top, ` : ''}${b.tanks.map(t => `a <b>${esc(B(t).t)}</b>`).join(', ')}${b.tanks.length ? ' and ' : ''}a <b>${esc(B(b.unit).t)}</b>, engines level with the core's.${b.cross ? ' Right-click each radial decoupler → <b>Enable crossfeed</b> (asparagus).' : ''}`);
   });
-  { const bs = g.stages[g.stages.length - 1], bt = bs && bs.tanks.length ? B(bs.tanks[bs.tanks.length - 1]).t : null;
-    for (const [id, n] of fix.filter(([id]) => B(id).rfin || B(id).wing)) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> on the ${bt ? `bottom ${esc(bt)}` : 'bottom tank'}, their back edges level with its lower end, just above the engine (not on the engine itself). Rotate them so they line up with the boosters or sit between them.`); }
+  { const bs = g.stages[g.stages.length - 1], bt = bs && bs.tanks.length ? B(bs.tanks[bs.tanks.length - 1]).t : bs && bs.eng && B(bs.eng).srb ? B(bs.eng).t : null;
+    for (const [id, n] of fix.filter(([id]) => B(id).rfin || B(id).wing)) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> on the ${bt ? `bottom ${esc(bt)}` : 'bottom tank'}, their back edges level with its lower end, just above the ${bs && !bs.tanks.length && bs.eng && B(bs.eng).srb ? 'nozzle' : 'engine'} (not on the engine or nozzle itself). Rotate them so they line up with the boosters or sit between them.`); }
   for (const [id, n] of fix.filter(([id]) => B(id).leg)) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> around the stage that lands.`);
   for (const [id, n] of fix.filter(([id]) => B(id).chute && B(id).d === 'r')) st.push(`${sym(n)} ${n}× <b>${esc(B(id).t)}</b> on the pod.`);
   for (const [id] of fix.filter(([id]) => B(id).shield)) st.push(`Attach the <b>${esc(B(id).t)}</b> under the pod (it's the bottom of the capsule on the way home).`);
