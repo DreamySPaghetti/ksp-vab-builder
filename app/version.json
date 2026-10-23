@@ -1,9 +1,9 @@
 {
   "web": 48,
-  "apk": 3,
+  "apk": 4,
   "sha256": "5d1ed4d4a9c73dfe2cc75a0f7f246a129f7f8737cb94dc889b87ae8b7963c2b6",
   "notes": "Part data checked against the KSP wiki's Parts tables: correct couplers (TVR-200/1180C/2160C/200L/300L/400L), intake, adapter, heat shield, gear, cupola and engine figures; Balanced now weighs mass too; spaceplane search mounts its own jets on nacelles",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
-  "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
+  "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2
 }
