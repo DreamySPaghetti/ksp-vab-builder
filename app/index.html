@@ -192,23 +192,23 @@ intake('nacelle', 'Engine Nacelle', 0.9, 600, 0.005, 0, 1.25, 1.875, { dry: 0.15
 intake('precooler', 'Engine Pre-cooler', 0.35, 1650, 0.006, 1, 1.25, 1.875, { dry: 0.15, lf: 40, ox: 0, pod: true });
 // wings and control surfaces: lift rating; wing area = 4 m² per lift (matches the wiki's dimensions table)
 const wing = (id, t, m, c, lift, o = {}) => add('Aerodynamics', id, t, Object.assign({ m, dry: m, $: c, lift, d: 'r', h: 0.1, wing: true }, o));
-wing('connA', 'Wing Connector Type A', 0.2, 500, 2);
-wing('connB', 'Wing Connector Type B', 0.2, 500, 2);
-wing('connC', 'Wing Connector Type C', 0.1, 250, 1);
-wing('connD', 'Wing Connector Type D', 0.05, 100, 0.5);
-wing('connE', 'Wing Connector Type E', 0.05, 100, 0.5);
+wing('connA', 'Wing Connector Type A', 0.2, 500, 2, { panel: true });
+wing('connB', 'Wing Connector Type B', 0.2, 500, 2, { panel: true });
+wing('connC', 'Wing Connector Type C', 0.1, 250, 1, { panel: true });
+wing('connD', 'Wing Connector Type D', 0.05, 100, 0.5, { panel: true });
+wing('connE', 'Wing Connector Type E', 0.05, 100, 0.5, { panel: true });
 wing('delta', 'Delta Wing', 0.2, 600, 2);
 wing('deltaS', 'Small Delta Wing', 0.05, 200, 0.5);
-wing('strake', 'Wing Strake', 0.05, 400, 0.5);
-wing('structA', 'Structural Wing Type A', 0.1, 500, 1);
-wing('structB', 'Structural Wing Type B', 0.1, 500, 1);
-wing('structC', 'Structural Wing Type C', 0.05, 300, 0.5);
-wing('structD', 'Structural Wing Type D', 0.025, 150, 0.25);
+wing('strake', 'Wing Strake', 0.05, 400, 0.5, { strake: true });
+wing('structA', 'Structural Wing Type A', 0.1, 500, 1, { panel: true });
+wing('structB', 'Structural Wing Type B', 0.1, 500, 1, { panel: true });
+wing('structC', 'Structural Wing Type C', 0.05, 300, 0.5, { panel: true });
+wing('structD', 'Structural Wing Type D', 0.025, 150, 0.25, { panel: true });
 wing('sweptA', 'Swept Wing Type A', 0.113, 500, 1.13);
 wing('sweptB', 'Swept Wing Type B', 0.226, 500, 2.26);
 wing('swept', 'Swept Wings', 0.275, 620, 1.37);
 wing('bigSdelta', 'Big-S Delta Wing', 2.0, 3000, 5, { dry: 0.5, lf: 300, ox: 0 });
-wing('bigSstrake', 'Big-S Wing Strake', 0.6, 1000, 1, { dry: 0.1, lf: 100, ox: 0 });
+wing('bigSstrake', 'Big-S Wing Strake', 0.6, 1000, 1, { dry: 0.1, lf: 100, ox: 0, strake: true });
 wing('fat455', 'FAT-455 Aeroplane Main Wing', 3.78, 2800, 7.8, { dry: 0.78, lf: 600, ox: 0 });
 wing('elevon1', 'Elevon 1', 0.05, 400, 0.25, { ctrl: true });
 wing('elevon2', 'Elevon 2', 0.06, 550, 0.3, { ctrl: true });
@@ -247,6 +247,11 @@ adp('kerbodyneAdp', 'Kerbodyne ADTP-2-3', 0.2, 1000, 2.5, 3.75, 1.2);
 adp('mk2to125', 'Mk2 to 1.25m Adapter', 0.29, 550, 1.25, 'mk2', 1.875);
 adp('mk3to25', 'Mk3 to 2.5m Adapter', 0.79, 800, 2.5, 'mk3', 2.5);
 adp('mk3toMk2', 'Mk3 to Mk2 Adapter', 0.6, 800, 'mk2', 'mk3', 2.5);
+// multi-couplers: one stack node on top, several engine nodes underneath (≈ wiki figures)
+const cpl = (id, t, m, c, d, n, d2, h, tech) => add('Coupling', id, t, { m, dry: m, $: c, d, d2, h, coupler: n, tech });
+cpl('tvr200l', 'TVR-200L Stack Bi-Adapter', 0.1, 400, 1.25, 2, 1.25, 0.6, 'Advanced Construction');
+cpl('tvr300l', 'TVR-300L Stack Tri-Adapter', 0.15, 500, 1.25, 3, 1.25, 0.6, 'Advanced Construction');
+cpl('tvr2160c', 'TVR-2160C Mk2 Stack Quad-Coupler', 0.2, 2000, 2.5, 4, 1.25, 0.9, 'Advanced Construction');
 // parachutes (wiki)
 const chute = (id, t, m, c, d, full) => add('Utility', id, t, { m, dry: m, $: c, d, h: 0.4, chute: { full } });
 chute('mk16', 'Mk16 Parachute', 0.1, 422, 0.625, 20.7);
@@ -1193,7 +1198,7 @@ function evaluateShuttle(sh, goal, inv, detail, lim) {
   let lf = 0, ox = 0, oWet = B(sh.cmd).m + cargo, oDry = B(sh.cmd).m + cargo, S = 0;
   for (const t of sh.otanks) { lf += B(t).lf || 0; ox += B(t).ox || 0; oWet += B(t).m; oDry += B(t).dry; if (B(t).lift) S += 4 * B(t).lift; }
   oWet += e.m * sh.n; oDry += e.dry * sh.n;
-  for (const [id, n] of sh.wings) { oWet += B(id).m * n; oDry += (B(id).dry != null ? B(id).dry : B(id).m) * n; S += 4 * B(id).lift * n; lf += (B(id).lf || 0) * n; }
+  for (const [id, n] of sh.wings) { oWet += B(id).m * n; oDry += (B(id).dry != null ? B(id).dry : B(id).m) * n; if (!B(id).fin) S += 4 * B(id).lift * n; lf += (B(id).lf || 0) * n; }
   if (sh.gear) { oWet += B(sh.gear.id).m * sh.gear.n; oDry += B(sh.gear.id).m * sh.gear.n; }
   for (const [id, n] of Object.entries(sh.fix || {})) { oWet += B(id).m * n; oDry += B(id).m * n; }
   const oProp = Math.min(usableProp(e, lf, ox), oWet - oDry);
@@ -1240,6 +1245,8 @@ function evaluateShuttle(sh, goal, inv, detail, lim) {
   if (B(sh.cmd).crew && !B(sh.cmd).plane) stab.push(`${B(sh.cmd).t} is a blunt capsule: the orbiter glides home, so it needs a cockpit.`);
   { const ns = p => [p.d, p.d2].filter(x => x != null && x !== 'r').map(x => x === 'mk2' ? 1.25 : x === 'mk3' ? 3.75 : x); const st0 = [sh.cmd, ...sh.otanks].concat(sh.n === 1 ? [sh.eng] : []); for (let i = 1; i < st0.length; i++) { const a = ns(B(st0[i - 1])), b2 = ns(B(st0[i])); if (a.length && b2.length && !a.some(x => b2.includes(x))) { stab.push(`The orbiter's ${B(st0[i - 1]).t} and ${B(st0[i]).t} are different sizes: keep its fuselage one size.`); break; } } }
   chk('Orbiter: a cockpit and a fuselage of one size');
+  if (!sh.wings.some(([id, n]) => !B(id).ctrl && !B(id).fin && !B(id).panel && !B(id).strake && n >= 2)) stab.push('The orbiter needs a pair of real wings (delta, swept or main wings); wing connectors and structural panels only fill gaps.');
+  chk('Orbiter has real wings');
   if (new Set(sh.wings.map(([id]) => id)).size > 5) stab.push('The orbiter uses more than 5 kinds of wing part: keep the wing simple (a main wing, elevons, a tail fin).');
   chk('Simple orbiter wing');
   const pitch = sh.wings.filter(([id]) => B(id).ctrl && !B(id).fin).reduce((a, [, n]) => a + n, 0), yaw = sh.wings.filter(([id]) => B(id).fin).reduce((a, [, n]) => a + n, 0);
@@ -1278,7 +1285,7 @@ function optimizeShuttle(inv, goal, opts = {}) {
   const engs = ids.filter(id => B(id).ta != null && !B(id).srb && B(id).d !== 'r' && B(id).fuel === 'LFO' && !B(id).jet);
   const srbs = ids.filter(id => B(id).srb), rdecs = ids.filter(id => B(id).dec && B(id).radial);
   const tanks = ids.filter(id => B(id).cat === 'Fuel tanks' && B(id).ox > 0 && B(id).d !== 'r');
-  const wings = ids.filter(id => B(id).wing), gears = ids.filter(id => B(id).gear && (inv[id] || 0) >= 3), cones = ids.filter(id => B(id).cone);
+  const wings = ids.filter(id => B(id).wing && !B(id).panel), gears = ids.filter(id => B(id).gear && (inv[id] || 0) >= 3), cones = ids.filter(id => B(id).cone);
   if (!cmds.length || !engs.length || !tanks.length || !wings.length || !gears.length || !rdecs.length) return { error: 'A shuttle needs a cockpit or probe, liquid engines, fuel tanks, wings, landing gear and radial decouplers.' };
   const must = (opts.must || []).filter(id => B(id) && (inv[id] || 0) > 0);
   const lim = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin', cargo: opts.cargo || 0 });
@@ -1525,9 +1532,10 @@ function build(d) {
   addP(d.cmd); d.tanks.forEach(t => addP(t));
   addP(d.jet.id, d.jet.n); if (d.rocket) addP(d.rocket.id, d.rocket.n);
   for (const [id, n] of d.intakes) { addP(id, n); area += B(id).intake.a * n; }
-  for (const [id, n] of d.wings) { addP(id, n); S += 4 * B(id).lift * n; }
+  for (const [id, n] of d.wings) { addP(id, n); if (!B(id).fin) S += 4 * B(id).lift * n; } // tail fins stand upright: they steer, they don't hold the plane up
   for (const id of d.tanks) if (B(id).lift) S += 4 * B(id).lift;
   if (d.gear) addP(d.gear.id, d.gear.n);
+  if (d.mount && d.mount.adp) addP(d.mount.adp); if (d.mount && d.mount.cpl) addP(d.mount.cpl);
   for (const [id, n] of Object.entries(d.fix || {})) addP(id, n);
   // drag area: the widest fuselage, plus anything hung outside it
   const prof = [d.cmd, ...d.tanks].map(id => B(id).d).filter(x => x !== 'r');
@@ -1706,11 +1714,27 @@ function planeRules(d, k, extra = {}) {
   const NODE = { 0.625: 0, 1.25: 1, mk2: 1, 1.875: 1.5, 2.5: 2, mk3: 3, 3.75: 3, 5: 4 }, cp = BY[d.cmd];
   chk('A cockpit, not a capsule', cp.crew && !cp.plane ? `${cp.t} is a blunt capsule: a plane needs a cockpit (research Aviation).` : null);
   chk('A fuselage (fuel tanks in the body)', !d.tanks.length ? 'Needs at least one fuselage tank: wings, engines and gear have nothing to attach to.' : null);
-  const stack = [d.cmd, ...d.tanks].concat(d.jet.n === 1 && BY[d.jet.id].d !== 'r' && !(d.rocket && d.rocket.n === 1 && BY[d.rocket.id].d !== 'r' && d.rocket.id !== d.jet.id) ? [d.jet.id] : []);
+  const stack = [d.cmd, ...d.tanks]; // engines are checked with their mount
   const ns = p => [p.d, p.d2].filter(x => x != null && NODE[x] != null).map(x => NODE[x]);
-  const bad = []; for (let i = 1; i < stack.length; i++) { const a = ns(BY[stack[i - 1]]), b = ns(BY[stack[i]]); if (a.length && b.length && !a.some(x => b.includes(x))) bad.push(`${BY[stack[i - 1]].t} → ${BY[stack[i]].t}`); }
-  chk('Body parts fit together', bad.length ? `Different sizes meet without an adapter: ${bad.slice(0, 2).join(', ')}. Keep the fuselage one size.` : null);
+  const bad = []; for (let i = 1; i < stack.length; i++) { const a = ns(BY[stack[i - 1]]), b = ns(BY[stack[i]]); if (a.length && b.length && !a.some(x => b.includes(x))) bad.push(`${BY[stack[i - 1]].t} and ${BY[stack[i]].t} are different sizes`); }
+  const midAdp = d.tanks.slice(0, -1).find(t => BY[t].d2 != null);
+  if (midAdp) bad.push(`${BY[midAdp].t} changes size: it can only go at the very back, in front of the engine`);
+  chk('Body parts fit together', bad.length ? `The fuselage doesn't fit together: ${bad.slice(0, 2).join('; ')}. Keep it one size, with any adapter at the back.` : null);
   const W = d.wings.map(([id, n]) => [BY[id], n]);
+  // wings: a real main wing pair carries the plane; connectors and structural panels only fill gaps between real wings
+  const main = W.filter(([p]) => !p.ctrl && !p.fin && !p.strake && !p.panel).reduce((a, [, n]) => a + n, 0);
+  chk('A real main wing (not connectors or structural panels)', main < 2 ? 'Needs a pair of real wings (delta, swept or main wings). Wing connectors and structural wing panels only fill in between real wings.' : null);
+  chk('No wing connectors or structural panels on their own', W.some(([p]) => p.panel) ? 'Wing connectors and structural wings are building panels, not wings: use a delta, swept or main wing.' : null);
+  // how the engines hang on: one on the tail, several on a multi-coupler, or each on its own nacelle
+  const mt = d.mount || {};
+  chk('Every engine has somewhere to attach', mt.err || null);
+  const podN = d.intakes.filter(([id]) => BY[id].pod).reduce((a, [, n]) => a + n, 0);
+  chk('Nacelles in pairs', podN % 2 ? `${podN} engine nacelle${podN > 1 ? 's' : ''}: an odd number hangs off one side. Use them in pairs.` : null);
+  const ni0 = d.intakes.some(([id]) => BY[id].nose && !BY[id].pod);
+  chk('A pointed nose', !BY[d.cmd].nose && !ni0 ? `The ${BY[d.cmd].t} has a flat front: put a nose cockpit or a nose intake (Shock Cone, Circular Intake) in front of it.` : null);
+  const noseIn = d.intakes.filter(([id]) => BY[id].nose && !BY[id].pod);
+  chk('Stack intakes only on the nose', noseIn.length && (BY[d.cmd].nose || noseIn.reduce((a, [, n]) => a + n, 0) > 1) ? `${BY[noseIn[0][0]].t} is a stack part: it only fits on the very front of the fuselage, in front of an inline cockpit or probe core. Use radial intakes (XM-G50) on the sides instead.` : null);
+  if (noseIn.length && !BY[d.cmd].nose) { const a = BY[noseIn[0][0]], c = BY[d.cmd]; chk('Nose intake the same size as the fuselage', a.d !== c.d && !(a.d === 1.25 && c.d === 'mk2') ? `${a.t} (${a.d} m) doesn't fit the ${c.d} m front of the ${c.t}.` : null); }
   const pitch = W.filter(([p]) => p.ctrl && !p.fin).reduce((a, [, n]) => a + n, 0), yaw = W.filter(([p]) => p.fin).reduce((a, [, n]) => a + n, 0);
   chk('Elevons for pitch and roll', pitch < 2 ? 'Needs at least 2 elevons or canards to pitch and roll.' : null);
   chk('Tail fin for yaw', yaw < 1 ? 'Needs a tail fin to stay pointed straight.' : null);
@@ -1724,10 +1748,31 @@ function planeRules(d, k, extra = {}) {
   if (extra.maxQ != null) chk('Air loads on the climb (under 80 kPa)', extra.maxQ > 80000 ? `Hits ${(extra.maxQ / 1000).toFixed(0)} kPa of dynamic pressure low down: it will overheat or break up. Climb steeper or use less thrust.` : null);
   return { checks, notes };
 }
+// pick how the jets (and a rocket) hang on, from the parts you have
+function fitMount(d, inv) {
+  const B = id => BY[id], J = B(d.jet.id), last = B(d.tanks.length ? d.tanks[d.tanks.length - 1] : d.cmd), prev = B(d.tanks.length > 1 ? d.tanks[d.tanks.length - 2] : d.cmd), n1 = x => x === 'mk2' ? 1.25 : x;
+  const tail = last.d2 != null && d.tanks.length ? (n1(prev.d) === n1(last.d) ? n1(last.d2) : n1(last.d)) : n1(last.d);
+  const tailRocket = d.rocket && B(d.rocket.id).d !== 'r' && d.rocket.id !== d.jet.id;
+  const pods = d.intakes.filter(([id]) => B(id).pod).reduce((a, [, n]) => a + n, 0);
+  const m = { kind: null, adp: null, cpl: null, err: null };
+  const adapterFor = (from, to) => from === to ? undefined : Object.keys(inv).find(id => (inv[id] || 0) > 0 && B(id) && (B(id).adp || B(id).cat === 'Fuel tanks') && B(id).d2 != null && [B(id).d, B(id).d2].includes(from) && [B(id).d, B(id).d2].includes(to) && !(B(id).lf > 0 && B(id).cat !== 'Fuel tanks')) || null;
+  if (J.d === 'r') { if (d.jet.n % 2) m.err = `${d.jet.n}× ${J.t} on the fuselage sides: an odd number pushes the plane sideways. Use a pair.`; else m.kind = 'radial'; }
+  else if (tailRocket || d.jet.n > 1) {
+    if (pods >= d.jet.n && d.jet.n % 2 === 0) m.kind = 'nacelles';
+    else if (pods >= d.jet.n && tailRocket) m.err = `One ${J.t} on one nacelle pushes the plane sideways: use two (one under each wing).`;
+    else if (!tailRocket) {
+      const c = Object.keys(inv).filter(id => (inv[id] || 0) > 0 && B(id) && B(id).coupler === d.jet.n && B(id).d === tail).sort((a, b) => B(a).m - B(b).m)[0];
+      if (c && (J.d === 0.625 || J.d === 1.25)) { m.kind = 'coupler'; m.cpl = c; }
+      else m.err = `${d.jet.n}× ${J.t} need ${d.jet.n === 2 ? 'a TVR-200L Stack Bi-Adapter' : d.jet.n === 3 ? 'a TVR-300L Stack Tri-Adapter' : 'a multi-coupler'} on a ${tail} m tail, or one Engine Nacelle each.`;
+    } else m.err = `The ${B(d.rocket.id).t} takes the tail, so the ${J.t} need Engine Nacelles (one each) to sit on.`;
+  } else { m.kind = 'tail'; if (J.d !== tail && !(J.d === 0.625 && tail === 1.25 && last.d2 === 0.625)) { const a = adapterFor(tail, J.d); if (a === null) m.err = `The ${J.t} (${J.d} m) doesn't fit the ${tail} m tail and there's no adapter for it.`; else m.adp = a; } }
+  if (tailRocket && !m.err) { const R = B(d.rocket.id); if (d.rocket.n > 1) m.err = m.err || `${d.rocket.n} stack rocket engines can't share one tail.`; else if (R.d !== tail && m.kind !== 'tail') { const a = adapterFor(tail, R.d); if (a === null) m.err = `The ${R.t} doesn't fit the ${tail} m tail.`; else m.adp = a; } }
+  d.mount = m; return d;
+}
 function fitGear(d, inv, cargo) { // the lightest gear set that can carry it, as on a real plane
   const k = build(d), m = k.m + (cargo || 0);
   let best = null;
-  for (const id of Object.keys(GEAR_CAP)) { const have = inv[id] || 0, n = Math.max(3, Math.ceil(m / (GEAR_CAP[id] * 0.8))); if (have < 3) continue; const nn = Math.min(n, have, 8), okk = nn >= n; const w = BY[id].m * nn + (okk ? 0 : 1e3); if (!best || w < best.w) best = { id, n: nn, w }; }
+  for (const id of Object.keys(GEAR_CAP)) { const have = inv[id] || 0, n = Math.max(3, Math.ceil(m / (GEAR_CAP[id] * 0.8))); if (have < 3) continue; const n2 = n % 2 ? n : n + 1, nn = Math.min(n2, have % 2 ? have : have - 1, 9), okk = nn >= n; const w = BY[id].m * nn + (okk ? 0 : 1e3); if (!best || w < best.w) best = { id, n: nn, w }; }
   if (best) d.gear = { id: best.id, n: best.n };
   return d;
 }
@@ -1786,7 +1831,7 @@ function optimize(inv, goal, opts = {}) {
   const ids = Object.keys(inv).filter(has);
   const jets = ids.filter(id => BY[id].jet), rockets = ids.filter(id => BY[id].ta != null && !BY[id].srb && BY[id].fuel !== 'MONO' && !BY[id].lf);
   const tanks = ids.filter(id => BY[id].lf != null && BY[id].cat === 'Fuel tanks' && BY[id].d !== 'r');
-  const intakes = ids.filter(id => BY[id].intake), wings = ids.filter(id => BY[id].wing), gears = ids.filter(id => BY[id].gear);
+  const intakes = ids.filter(id => BY[id].intake), wings = ids.filter(id => BY[id].wing && !BY[id].panel), gears = ids.filter(id => BY[id].gear);
   let cmds = ids.filter(id => BY[id].cmd).sort((a, b) => (BY[b].plane ? 1 : 0) - (BY[a].plane ? 1 : 0));
   if (opts.crewed) { const cr = cmds.filter(id => BY[id].crew); if (cr.length) cmds = cr; }
   if (!jets.length || !wings.length || !intakes.length || !cmds.length) return { error: 'A spaceplane needs a cockpit or probe, jet engines, air intakes and wings.' };
@@ -1796,12 +1841,12 @@ function optimize(inv, goal, opts = {}) {
   gear.id = gearPick; gear.n = 3;
   const sciFix = Object.fromEntries(ids.filter(id => BY[id].sci).map(id => [id, inv[id]]));
   opts.limits = Object.assign({}, opts.limits || {}, { objective: opts.objective || 'margin', task: opts.task || null });
-  const used = d => { const c = {}; const a = (id, n = 1) => { c[id] = (c[id] || 0) + n; }; a(d.cmd); for (const [id, n] of Object.entries(d.fix || {})) a(id, n); d.tanks.forEach(t => a(t)); a(d.jet.id, d.jet.n); if (d.rocket) a(d.rocket.id, d.rocket.n); d.intakes.forEach(([id, n]) => a(id, n)); d.wings.forEach(([id, n]) => a(id, n)); a(d.gear.id, d.gear.n); return c; };
+  const used = d => { const c = {}; const a = (id, n = 1) => { c[id] = (c[id] || 0) + n; }; a(d.cmd); for (const [id, n] of Object.entries(d.fix || {})) a(id, n); d.tanks.forEach(t => a(t)); a(d.jet.id, d.jet.n); if (d.rocket) a(d.rocket.id, d.rocket.n); d.intakes.forEach(([id, n]) => a(id, n)); d.wings.forEach(([id, n]) => a(id, n)); a(d.gear.id, d.gear.n); if (d.mount && d.mount.adp) a(d.mount.adp); if (d.mount && d.mount.cpl) a(d.mount.cpl); return c; };
   const fitsP = d => Object.entries(used(d)).every(([id, n]) => (inv[id] || 0) >= n);
   const must = (opts.must || []).filter(id => BY[id] && (inv[id] || 0) > 0);
   const scoreM = d => { const e = score(d, goal, opts.limits), u = used(d), miss = must.filter(id => !(u[id] > 0)); if (miss.length) { e.score -= 6000 * miss.length; e.ok = false; e.stab = (e.stab || []).concat(miss.map(id => `Doesn't use ${BY[id].t}, which you marked as must-use.`)); } return e; };
   const seedWings = () => { // a main wing pair, a pair of elevons and a tail fin, like a real plane
-    const lw = wings.filter(id => !BY[id].ctrl && inv[id] >= 2).sort((a, b) => BY[b].lift - BY[a].lift)[0] || wings[0];
+    const lw = wings.filter(id => !BY[id].ctrl && !BY[id].strake && inv[id] >= 2).sort((a, b) => BY[b].lift - BY[a].lift)[0] || wings[0];
     const out = [[lw, Math.min(inv[lw], 2)]], el = wings.find(id => BY[id].ctrl && !BY[id].fin && inv[id] >= 2 && id !== lw), fn = wings.find(id => BY[id].fin && id !== lw);
     if (el) out.push([el, 2]); if (fn) out.push([fn, 1]); return out;
   };
@@ -1821,7 +1866,7 @@ function optimize(inv, goal, opts = {}) {
       if (p.cmd) d.cmd = id; else if (p.jet) d.jet = { id, n: Math.min(inv[id], d.jet.n || 1) }; else if (p.ta != null) d.rocket = { id, n: p.d === 'r' ? Math.min(2, inv[id]) : 1 };
       else if (p.cat === 'Fuel tanks' && p.d !== 'r') d.tanks.push(id); else if (p.intake) d.intakes.push([id, 1]); else if (p.wing) d.wings.push([id, Math.min(2, inv[id])]); else if (p.gear) d.gear = { id, n: Math.min(3, inv[id]) }; else d.fix = Object.assign({}, d.fix, { [id]: 1 });
     }
-    if (!mustGear) fitGear(d, inv, cargo);
+    fitMount(d, inv); if (!mustGear) fitGear(d, inv, cargo);
     let cur = fitsP(d) ? scoreM(d) : { score: -1e9 }, curD = d; tested++;
     for (let it = 0, tries = 0; it < iters && tries < iters * 20; tries++) {
       const n = JSON.parse(JSON.stringify(curD)), mv = r();
@@ -1834,7 +1879,7 @@ function optimize(inv, goal, opts = {}) {
       else if (mv < 0.86) { const id = pick(intakes), i = n.intakes.findIndex(w => w[0] === id); const step = r() < 0.55 ? 1 : -1; if (i >= 0) { n.intakes[i][1] = Math.max(0, n.intakes[i][1] + step); if (!n.intakes[i][1]) n.intakes.splice(i, 1); } else if (step > 0) n.intakes.push([id, 1]); }
       else if (!must.some(id => BY[id].cmd)) n.cmd = pick(cmds);
       if (opts.task) n.rocket = null; // aircraft fly on jets alone
-      if (!mustGear) fitGear(n, inv, cargo);
+      fitMount(n, inv); if (!mustGear) fitGear(n, inv, cargo);
       if (!n.wings.length || !n.intakes.length || !fitsP(n)) continue;
       const e = scoreM(n), T = 400 * Math.pow(0.003, it / iters); it++; tested++; if (opts.tick && tested % 2000 === 0) opts.tick(tested);
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curD = n; }
@@ -1848,7 +1893,7 @@ function optimize(inv, goal, opts = {}) {
   return { d: best.d, r: fin, goal, unused, plane: true, tested };
 }
 
-const api = { fly, score, optimize, build, air, airTask, BIOMES };
+const api = { fitMount, fly, score, optimize, build, air, airTask, BIOMES };
 if (typeof module !== 'undefined') module.exports = api; else root.SHIP_PLANE = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -2798,7 +2843,7 @@ const cache = {};
 function resultOf(m, i) {
   const k = m.id + ':' + i; if (cache[k]) return cache[k];
   if (m.kind === 'station' || m.kind === 'base') return (cache[k] = m.S);
-  if (m.kind === 'plane' || m.kind === 'air') { const r = PLN.score(m.d, m.goal, Object.assign({}, m.lim, { task: m.task || null, objective: 'balance' })); return (cache[k] = { d: m.d, goal: m.goal, plane: true, r }); }
+  if (m.kind === 'plane' || m.kind === 'air') { const invP = inventory(); for (const id of [m.d.cmd, ...m.d.tanks]) invP[id] = Math.max(invP[id] || 0, 9); PLN.fitMount(m.d, invP); const r = PLN.score(m.d, m.goal, Object.assign({}, m.lim, { task: m.task || null, objective: 'balance' })); return (cache[k] = { d: m.d, goal: m.goal, plane: true, r }); }
   if (m.kind === 'shuttle') { const inv = inventory(); for (const [id, n] of Object.entries(O.shParts(m.s))) inv[id] = Math.max(inv[id] || 0, n + 9); return (cache[k] = { s: m.s, goal: m.goal, shuttle: true, r: O.evaluateShuttle(m.s, m.goal, inv, true, Object.assign({}, m.lim, { objective: 'balance' })) }); }
   const o = m.opts[i], inv = inventory(); for (const id of Object.keys(O.partsUsed(o.g))) inv[id] = Math.max(inv[id] || 0, 99);
   const R = { g: o.g, goal: m.goal, r: O.evaluate(o.g, m.goal, inv, true, Object.assign({}, m.lim, { objective: o.ob })) };
@@ -2838,10 +2883,32 @@ function planeHtml(m, R) {
   let h = `<div class="verdict ${r.ok ? 'ok' : 'bad'}"><b>${r.ok ? 'Can do it' : 'Can\'t do it'}: ${esc(air ? airName(m.task) : O.goalName(m.goal))}</b>${air ? esc(f.msg || '') : r.ok ? `${fmt(r.margin)} m/s to spare in orbit.` : esc(f.msg || (r.margin < 0 ? `${fmt(-r.margin)} m/s short.` : ''))}${badList(r, true)}</div>`;
   h += statBox(air ? [['Mass', `${fmt(k.m + (f.cargo || 0), 1)} t`], ['Parts', k.parts], ['Cost', `√${fmt(k.cost)}`], ['Range', f.rangeKm ? `${fmt(f.rangeKm)} km` : '–'], ['Cruise', f.alt ? `${fmt(f.alt / 1000, 1)} km` : '–'], ['Speed', f.v ? `${fmt(f.v)} m/s` : '–']]
     : [['Mass', `${fmt(k.m, 1)} t`], ['Parts', k.parts], ['Cost', `√${fmt(k.cost)}`], ['Wing area', `${fmt(k.S)} m²`], ['Left in orbit', f.ok ? `${fmt(f.dvLeft)} m/s` : '–'], ['Jets to', f.jetTop && f.jetTop.alt ? `${fmt(f.jetTop.alt / 1000, 1)} km` : '–']]) + '<canvas id="view"></canvas>';
-  const noseIntake = d.intakes.find(([id]) => B(id).nose);
-  const body = [noseIntake && !B(d.cmd).nose ? `${esc(B(noseIntake[0]).t)} on the nose` : null, `${esc(B(d.cmd).t)}`, ...d.tanks.map(t => esc(B(t).t)), `${d.jet.n}× ${esc(B(d.jet.id).t)}${d.jet.n > 1 ? ' side by side at the tail (on nacelles or a multi-coupler)' : d.rocket && B(d.rocket.id).d !== 'r' && d.rocket.id !== d.jet.id ? ' on a nacelle beside the tail (the rocket takes the tail itself)' : ' at the tail'}`, d.rocket ? `${d.rocket.n}× ${esc(B(d.rocket.id).t)} for the rocket part of the climb` : null];
-  const extra = [...d.intakes.filter(([id]) => !(noseIntake && id === noseIntake[0] && !B(d.cmd).nose)).map(([id, n]) => `${n}× ${esc(B(id).t)}`), ...d.wings.map(([id, n]) => `${n}× ${esc(B(id).t)}${B(id).fin ? ' (tail fin, on top at the back)' : n % 2 === 0 ? ' (mirror symmetry, in pairs)' : ''}`), ...Object.entries(d.fix || {}).map(([id, n]) => `${n}× ${esc(B(id).t)} (science)`), `${d.gear.n}× ${esc(B(d.gear.id).t)}: one under the nose, the rest just behind the centre of mass`, f.cargo ? `${fmt(f.cargo, 1)} t of cargo near the centre of mass` : null];
-  h += `<div class="card"><h3>Build it in the Spaceplane Hangar</h3><p class="note" style="margin:0 0 6px">Nose to tail along the fuselage:</p>${ul(body)}<p class="note" style="margin:8px 0 6px">Then attach:</p>${ul(extra)}<p class="note" style="margin:8px 0 0">Turn on the centre of mass and centre of lift markers: the lift marker should sit just behind the mass marker, with tanks full and empty.</p></div>`;
+  // the build, step by step, the way the parts actually attach in the hangar
+  const mt = d.mount || {}, cmd = B(d.cmd), steps = [], J = B(d.jet.id), tailRocket = d.rocket && B(d.rocket.id).d !== 'r' && d.rocket.id !== d.jet.id;
+  const noseIn = d.intakes.find(([id]) => B(id).nose && !B(id).pod), pods = d.intakes.filter(([id]) => B(id).pod), inl = d.intakes.filter(([id]) => B(id).lf && !B(id).nose && !B(id).pod && B(id).d !== 'r'), radIn = d.intakes.filter(([id]) => !B(id).nose && !B(id).pod && !(B(id).lf && B(id).d !== 'r'));
+  steps.push(`Start with the ${esc(cmd.t)}${cmd.nose ? ' (it is the nose)' : ''}.`);
+  if (noseIn && !cmd.nose) steps.push(`Put the ${esc(B(noseIn[0]).t)} on the front of it, as the nose.`);
+  const an = t => /^([AEIOU]|[FHLMNRSX][A-Z0-9-]{1,}\b)/.test(t) ? 'an' : 'a';
+  for (const [id, n] of inl) for (let k = 0; k < n; k++) steps.push(`Attach the ${esc(B(id).t)} behind the ${cmd.probe ? 'probe core' : 'cockpit'}: it is part of the fuselage.`);
+  d.tanks.forEach((t, i) => steps.push(`Attach ${an(B(t).t)} ${esc(B(t).t)} behind ${i ? 'it' : 'the ' + (cmd.probe ? 'probe core' : 'cockpit')}.`));
+  if (mt.adp) steps.push(`Attach the ${esc(B(mt.adp).t)} to the back, narrow end facing back.`);
+  if (mt.kind === 'tail') steps.push(`Attach the ${esc(J.t)} to the very back.`);
+  if (mt.kind === 'coupler') steps.push(`Attach the ${esc(B(mt.cpl).t)} to the very back, then a ${esc(J.t)} on each of its ${d.jet.n} lower nodes.`);
+  if (tailRocket) steps.push(`Attach the ${esc(B(d.rocket.id).t)} to the very back: it is for the rocket part of the climb.`);
+  const mainW = d.wings.filter(([id]) => !B(id).ctrl && !B(id).fin), elev = d.wings.filter(([id]) => B(id).ctrl && !B(id).fin && !/canard/i.test(B(id).t)), can = d.wings.filter(([id]) => /canard/i.test(B(id).t)), fins = d.wings.filter(([id]) => B(id).fin);
+  steps.push('Turn on mirror symmetry (X), angle snap on.');
+  for (const [id, n] of mainW) steps.push(`${n}× ${esc(B(id).t)}${B(id).strake ? ': along the fuselage in front of the main wings' : ': one on each side of the fuselage, on the rear half'}.`);
+  if (mt.kind === 'nacelles') steps.push(`${d.jet.n}× ${esc(B(pods[0][0]).t)} under the wings (or on the fuselage sides), pointing forward, then a ${esc(J.t)} on the back of each.`);
+  else for (const [id, n] of pods) steps.push(`${n}× ${esc(B(id).t)} under the wings, pointing forward.`);
+  if (mt.kind === 'radial') steps.push(`${d.jet.n}× ${esc(J.t)} on the fuselage sides at the back.`);
+  for (const [id, n] of elev) steps.push(`${n}× ${esc(B(id).t)} on the back edge of the wings, near the tips.`);
+  for (const [id, n] of can) steps.push(`${n}× ${esc(B(id).t)} on the front of the fuselage, behind the cockpit.`);
+  for (const [id, n] of fins) steps.push(`${n === 1 ? 'Symmetry off. ' : ''}${n}× ${esc(B(id).t)} on top at the back${n > 1 ? ' (one each side, tilted out slightly)' : ''}.`);
+  for (const [id, n] of radIn) steps.push(`${n}× ${esc(B(id).t)} on the top or sides of the fuselage${n % 2 ? ' (on top, symmetry off, for an odd number)' : ''}.`);
+  for (const [id, n] of Object.entries(d.fix || {})) steps.push(`${n}× ${esc(B(id).t)} anywhere on the fuselage (science).`);
+  steps.push(`Landing gear: 1× ${esc(B(d.gear.id).t)} under the nose, ${d.gear.n - 1}× under the wings just behind the centre of mass (mirror).`);
+  if (f.cargo) steps.push(`Put the ${fmt(f.cargo, 1)} t of cargo near the centre of mass.`);
+  h += `<div class="card"><h3>Build it in the Spaceplane Hangar</h3>${ul(steps)}<p class="note" style="margin:8px 0 0">Turn on the centre of mass and centre of lift markers: slide the wings until the lift marker sits just behind the mass marker, with tanks full and empty.</p></div>`;
   return h + checksCard(r, m) + `<p class="note">${air ? 'Range from a cruise model: lift from wing area, drag from the fuselage and induced drag, jet fuel use from Isp, intake air limits.' : 'The climb to orbit is flown in a 2D simulation of Kerbin\'s air; lift is 4 m² of wing per lift rating, as on the KSP wiki\'s wing table. Intake sizes and jet thrust curves between the wiki\'s figures are estimates.'}</p>`;
 }
 // an STS-style shuttle

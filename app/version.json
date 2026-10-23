@@ -1,8 +1,8 @@
 {
-  "web": 46,
+  "web": 47,
   "apk": 3,
-  "sha256": "b1b2a04aadc912b02342cd478927cfc6162d03d0d2b3a3dfc350193a18e26c72",
-  "notes": "Shuttles now follow the STS layout (tank wider and taller than the orbiter, two long boosters, nose cone) and the 3D picture shows the orange tank, boosters and a delta-winged orbiter",
+  "sha256": "82e49633f2062d89e523772176bd377136e43022acac43152a1203bee354796b",
+  "notes": "Planes and shuttles: only real wings carry them (connectors and structural panels no longer count), fins don't count as lift, every engine gets a real mount (tail, adapter, bi/tri-coupler or a pair of nacelles), nose intakes only on the nose, adapters only at the back, gear and nacelles in pairs, and step-by-step hangar instructions",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "Fixed updates while the app stays open; menu fits phones; Check for updates",
   "minApk": 2
