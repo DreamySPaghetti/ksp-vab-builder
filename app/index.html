@@ -1139,6 +1139,11 @@ function seedStages(g, goal, C, inv, variant) {
     if (dec) take(dec);
     stages.push({ eng: best.e, n: 1, tanks: best.list, dec: stages.length ? dec : null }); wMin = Math.max(wMin, sz(BY[best.e].d) || 0);
     above += best.wet + (dec ? BY[dec].m : 0);
+    const bigS = C.engs.filter(id => BY[id].srb && BY[id].d !== 'r' && BY[id].tv >= 150).sort((a, b) => BY[a].tv - BY[b].tv);
+    if (grp.launch && bigS.length && C.rdecs.length && variant % 2 === 1) { // some seeds start with boosters strapped on: 2 or 4 of each kind you have
+      const unit = bigS[(variant >> 1) % bigS.length], k = (variant >> 2) % 2 ? 2 : 4;
+      if (avail(unit) >= k && avail(C.rdecs[0]) >= k) return { stages: (stages[0].dec = null, stages), rings: [{ k, unit, tanks: [], dec: C.rdecs[0], cone: null, cross: false }] };
+    }
     if (grp.launch && best.twr < 1.4) { // not enough push off the pad: a pair (or more) of solid boosters
       const srb = C.engs.filter(id => BY[id].srb && BY[id].d !== 'r').sort((a, b) => BY[a].ta - BY[b].ta).find(id => BY[id].ta * 2 + BY[best.e].ta > 1.5 * (above + BY[id].m * 2) * 9.81) || C.engs.filter(id => BY[id].srb).sort((a, b) => BY[b].ta - BY[a].ta)[0];
       const rd = C.rdecs[0];
@@ -2920,6 +2925,15 @@ async function designRocket() {
   for (const o of good) { const res = x => x.r.margin >= Math.max(150, (x.r.need || 0) * (o.ob === 'balance' ? 0.10 : 0.05)); let b = null; for (const x of pool) if (res(x) && (!b || O.objScore(o.ob, x.r) > O.objScore(o.ob, b.r))) b = x; if (b && (!o.R.r.ok || O.objScore(o.ob, b.r) > O.objScore(o.ob, o.R.r) + 1e-6)) o.R = Object.assign({}, o.R, { g: b.g, r: b.r }); }
   // nothing made it: find out whether the buildings or the research are what's in the way
   let hint = null;
+  // still nothing: big solid boosters are easy for the search to miss, so try again with each one you have built in
+  if (!good.some(o => o.R.r.ok) && !must.length) {
+    const srbs = Object.keys(inv).filter(id => BY[id].srb && inv[id] > 0 && BY[id].tv >= 150).sort((a, b) => BY[b].tv - BY[a].tv).slice(0, 3);
+    for (const sb of srbs) {
+      $('runNote').textContent = `No design made it yet. Trying again built around the ${BY[sb].t}…`;
+      const S = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, must: [sb] }, Math.ceil(TARGET / 6), () => {});
+      if (!S.error && S.r.ok) { for (const o of good) o.R = Object.assign({}, o.R, { g: S.g, r: S.r }); break; }
+    }
+  }
   if (!good.some(o => o.R.r.ok)) {
     $('runNote').textContent = 'No design made it. Checking what is holding it back…';
     const U = await runPool(inv, goal, { limits: Object.assign({}, d.cargo ? { cargo: d.cargo } : {}), objective: 'balance', crewed: crew }, 60000, () => {});

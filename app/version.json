@@ -1,8 +1,8 @@
 {
-  "web": 51,
+  "web": 52,
   "apk": 4,
-  "sha256": "8fc7b94ef70a6459540743c7818388e21515f939c1b4497965081afb93855b28",
-  "notes": "Rocket search: many short restarts with varied seeds so early-career designs aren't stuck on one stage; failure message names the real limit (e.g. VAB part count)",
+  "sha256": "067aa4daff29dd3ff902bce1cd00acb1f418518f41c1e7aac0c662b3d6d1bdef",
+  "notes": "Rocket search: some searches start with 2 or 4 strapped-on solid boosters of each kind; if nothing passes, it retries built around each big booster before giving up",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2
