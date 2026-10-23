@@ -1,8 +1,8 @@
 {
-  "web": 56,
+  "web": 57,
   "apk": 4,
-  "sha256": "bf396fc93b2574b9d93faaf05b5e4943eba54d9006ad0387f7108e5b69c075b0",
-  "notes": "Dedicated landing stage (drops the transfer stage, wide footprint, landing fuel reserve), capsule decoupler for returns, must-use legs come as a set of 4, teach the network with your .craft files",
+  "sha256": "edf52ad1bb95841428c4868df7acd32db542c3c2051c3c25a67e251692324c53",
+  "notes": "Import Spaceplane Hangar (SPH) craft files too: planes you flew start later spaceplane and aircraft searches; plane designs that work are remembered",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2

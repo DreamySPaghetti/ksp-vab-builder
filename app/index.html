@@ -2034,6 +2034,12 @@ function optimize(inv, goal, opts = {}) {
       if (p.cmd) d.cmd = id; else if (p.jet) d.jet = { id, n: Math.min(inv[id], d.jet.n || 1) }; else if (p.ta != null) d.rocket = { id, n: p.d === 'r' ? Math.min(2, inv[id]) : 1 };
       else if (p.cat === 'Fuel tanks' && p.d !== 'r') d.tanks.push(id); else if (p.intake) d.intakes.push([id, 1]); else if (p.wing) d.wings.push([id, Math.min(2, inv[id])]); else if (p.gear) d.gear = { id, n: Math.min(3, inv[id]) }; else d.fix = Object.assign({}, d.fix, { [id]: 1 });
     }
+    if (opts.seeds && opts.seeds.length && rs % 3 === 1 && !must.length) { // a plane you flew or one that worked before, as a starting point
+      const s = JSON.parse(JSON.stringify(opts.seeds[((rs - 1) / 3 | 0) % opts.seeds.length])), cand = Object.assign({ fix: sciFix, intakes: [], wings: [], tanks: [], rocket: null }, s);
+      cand.tanks = cand.tanks.filter(t => (inv[t] || 0) > 0); cand.intakes = cand.intakes.filter(([id]) => (inv[id] || 0) > 0); cand.wings = cand.wings.filter(([id]) => (inv[id] || 0) > 0);
+      if (!cmds.includes(cand.cmd)) cand.cmd = d.cmd; if (!cand.jet || !(inv[cand.jet.id] > 0)) cand.jet = d.jet; if (cand.rocket && !(inv[cand.rocket.id] > 0)) cand.rocket = null; if (!cand.gear || !(inv[cand.gear.id] >= cand.gear.n)) cand.gear = d.gear; delete cand.mount; delete cand.src;
+      if (fitsP(cand)) d = cand;
+    }
     fitMount(d, inv); if (!mustGear) fitGear(d, inv, cargo);
     let cur = fitsP(d) ? scoreM(d) : { score: -1e9 }, curD = d; tested++;
     for (let it = 0, tries = 0; it < iters && tries < iters * 20; tries++) {
@@ -3130,7 +3136,46 @@ root.SHIP_VIZ = { draw };
     const crew = !!BY[g.cmd].crew;
     return { g, name: meta.ship || 'Craft', type: meta.type || 'VAB', crew, unknown: [...unknown], notes };
   }
-  const api = { parse, toDesign, idOf };
+  // a plane from the Spaceplane Hangar: the fuselage from the cockpit back, jets and rockets, intakes, wings, gear
+  function toPlane(text) {
+    const { meta, parts } = parse(text), notes = [], unknown = new Set();
+    if (!parts.length) return { error: 'That doesn\'t look like a KSP .craft file (no PART sections).' };
+    const byRef = new Map(parts.map(p => [p.ref, p])), parent = new Map();
+    for (const p of parts) for (const c of p.links) parent.set(c, p.ref);
+    for (const p of parts) if (!p.id) unknown.add(p.name);
+    const isSrf = p => p.srf && p.srf === parent.get(p.ref);
+    const cmdP = parts.find(p => p.id && BY[p.id].cmd);
+    if (!cmdP) return { error: 'No cockpit or probe core that this app knows was found.', unknown: [...unknown] };
+    // the fuselage: parts joined through stack nodes, in order of how far they are from the cockpit
+    const dist = new Map([[cmdP.ref, 0]]), q = [cmdP], adj = r => { const p = byRef.get(r), out = []; if (!p) return out; for (const c of p.links) { const C = byRef.get(c); if (C && !isSrf(C)) out.push(C); } const pr = parent.get(r); if (pr && !isSrf(p)) out.push(byRef.get(pr)); return out.filter(Boolean); };
+    while (q.length) { const p = q.shift(); for (const n of adj(p.ref)) if (!dist.has(n.ref)) { dist.set(n.ref, dist.get(p.ref) + 1); q.push(n); } }
+    const body = parts.filter(p => dist.has(p.ref)).sort((a, b) => dist.get(a.ref) - dist.get(b.ref));
+    const d = { cmd: cmdP.id, tanks: [], jet: { id: null, n: 0 }, rocket: null, intakes: [], wings: [], gear: null, fix: {} };
+    const cnt = (list, id, n = 1) => { const e = list.find(x => x[0] === id); if (e) e[1] += n; else list.push([id, n]); };
+    const jets = {}, rk = {};
+    const handled = new Set();
+    for (const p of body) { handled.add(p.ref); if (p === cmdP || !p.id) continue; const B = BY[p.id];
+      if (B.jet) jets[p.id] = (jets[p.id] || 0) + 1; else if (B.ta != null) rk[p.id] = (rk[p.id] || 0) + 1;
+      else if (B.intake) cnt(d.intakes, p.id); else if (B.cat === 'Fuel tanks' && B.d !== 'r') d.tanks.push(p.id); else if (B.adp || B.cpl) { /* worked out again */ } else d.fix[p.id] = (d.fix[p.id] || 0) + 1; }
+    // everything on the outside
+    for (const p of parts) { if (handled.has(p.ref) || !p.id) continue; const B = BY[p.id];
+      // a pod hung under the wing (Mk0 fuselage or nacelle with a jet behind it) counts as that jet's nacelle
+      if (B.cat === 'Fuel tanks' && B.d !== 'r' && !dist.has(p.ref)) { const kids = p.links.map(r => byRef.get(r)).filter(Boolean); if (kids.some(k => k.id && BY[k.id].jet)) continue; }
+      if (B.jet) jets[p.id] = (jets[p.id] || 0) + 1; else if (B.ta != null && !B.srb) rk[p.id] = (rk[p.id] || 0) + 1;
+      else if (B.intake) { const pr = byRef.get(parent.get(p.ref)); if (pr && pr.id && BY[pr.id].cat === 'Fuel tanks' && !dist.has(pr.ref) && BY[p.id].nose) continue; cnt(d.intakes, p.id); }
+      else if (B.wing) cnt(d.wings, p.id);
+      else if (B.gear) { if (!d.gear || d.gear.id === p.id) d.gear = { id: p.id, n: (d.gear ? d.gear.n : 0) + 1 }; else notes.push(`Mixed landing gear: counted the ${BY[d.gear.id].t}.`); }
+      else if (B.dec && B.radial) notes.push('Boosters or drop tanks on the plane were left out.');
+      else if (!B.srb) d.fix[p.id] = (d.fix[p.id] || 0) + 1; }
+    const jk = Object.keys(jets).sort((a, b) => jets[b] - jets[a]), rkk = Object.keys(rk).sort((a, b) => rk[b] - rk[a]);
+    if (jk.length) d.jet = { id: jk[0], n: jets[jk[0]] }; if (jk.length > 1) notes.push(`Mixed jet engines: counted ${jets[jk[0]]}× ${BY[jk[0]].t}.`);
+    if (rkk.length) d.rocket = { id: rkk[0], n: rk[rkk[0]] };
+    if (!d.jet.id) d.jet = { id: rkk[0] || null, n: 0 };
+    if (!d.jet.id) return { error: 'No jet or rocket engine this app knows was found on the plane.', unknown: [...unknown] };
+    if (!d.gear) notes.push('No landing gear found.');
+    return { plane: true, d, name: meta.ship || 'Plane', type: meta.type || 'SPH', crew: !!BY[d.cmd].crew, unknown: [...unknown], notes };
+  }
+  const api = { parse, toDesign, toPlane, idOf };
   if (typeof module !== 'undefined') module.exports = api; else root.CRAFT = api;
 })(typeof self !== 'undefined' ? self : this);
 
@@ -3403,6 +3448,13 @@ function seedsFor(goal, crew, inv) {
   const fromNet = NNOK && !st.nnOff ? NNET.propose(inv, goal, crew, limits('rocket'), 3).map(g => Object.assign(g, { src: 'network' })) : [];
   return fromNet.concat(fromMem);
 }
+// planes have their own memory: ones that worked (or that you flew and imported) start later plane searches
+const planeSeeds = key => (st.pmemory || []).filter(e => e.key === key || (key.startsWith('air:') ? e.key.startsWith('air:') : !e.key.startsWith('air:'))).sort((p, q) => (q.key === key) - (p.key === key) || (q.flew ? 1 : 0) - (p.flew ? 1 : 0) || q.t - p.t).slice(0, 4).map(e => JSON.parse(JSON.stringify(e.d)));
+function rememberPlane(key, crew, d0, flew) {
+  const mem = st.pmemory || (st.pmemory = []), d = JSON.parse(JSON.stringify(d0)); delete d.mount;
+  const sig = JSON.stringify([d.cmd, d.tanks, d.jet, d.rocket, d.wings]); if (mem.some(e => e.key === key && e.sig === sig)) return;
+  mem.push({ key, crew, d, sig, flew: !!flew, t: Date.now() }); while (mem.length > 40) mem.shift(); save();
+}
 function remember(goal, crew, gs) {
   const mem = st.memory || (st.memory = []);
   for (const g of gs) { const key = JSON.stringify(g.stages) + JSON.stringify(g.rings || []); if (mem.some(e => e.goal === goal && e.key === key)) continue; mem.push({ goal, crew, g: JSON.parse(JSON.stringify(g)), key, t: Date.now() }); }
@@ -3485,8 +3537,10 @@ async function design() {
     const rk = d.pmode !== 'air' && (d.rocketOnly || !has(inv, p => p.jet)); if (!has(inv, p => p.wing) || !has(inv, p => p.gear) || (!rk && (!has(inv, p => p.jet) || !has(inv, p => p.intake)))) { toast(rk ? 'A rocket plane needs wings and landing gear: research Aviation in Career.' : 'A plane needs jet engines, wings, air intakes and landing gear: research Aviation in Career.', 6000); return; }
     const air = d.pmode === 'air', task = air ? airTaskOf(d.air) : null, goal = air ? 'Air' : d.body + ':' + d.mission, crew = air ? true : (d.crew == null ? crewDefault(d.mission) : d.crew);
     runUI(true); const lim = limits('plane');
-    const R = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, task, rocketOnly: !air && !!d.rocketOnly, must: (d.must || []).filter(id => inv[id] > 0) }, tgt(), progress(tgt()), 'plane');
+    const pkey = air ? 'air:' + task.kind : goal, pseeds = planeSeeds(pkey);
+    const R = await runPool(inv, goal, { limits: lim, objective: 'balance', crewed: crew, task, rocketOnly: !air && !!d.rocketOnly, must: (d.must || []).filter(id => inv[id] > 0), seeds: pseeds }, tgt(), progress(tgt()), 'plane');
     if (R.error) { runUI(false); toast(R.error, 5000); return; }
+    if (R.r && R.r.ok) rememberPlane(pkey, crew, R.d);
     return addMission({ kind: air ? 'air' : 'plane', goal, task, crewed: crew, lim, d: R.d, tested: R.tested, optLabel: air ? 'Aircraft' : 'Spaceplane' });
   }
   // station or base
@@ -3767,7 +3821,7 @@ function renderTrain() {
   <label class="note" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="trB" checked style="width:auto"> Only with my buildings' limits</label>
   <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-trstart ${TR.run ? 'disabled' : ''}>Start practising</button><button class="btn" data-trstop ${TR.run ? '' : 'disabled'}>Stop</button></div>
   <p class="note" id="trNote" style="margin:8px 0 0">${TR.run ? 'Practising…' : 'Keep the app open while it practises. You can stop at any time; it keeps what it learned.'}</p></div>
-  <div class="card"><h3 style="margin-top:0">Teach it with your own crafts</h3><p class="note" style="margin:0 0 8px">Pick .craft files of rockets that really did the job in KSP (on your PC they're in the game folder under <b>saves/&lt;your save&gt;/Ships/VAB</b>; copy them to the phone first). Say which mission each one completed and the network learns from it, with extra weight because it flew.</p>
+  <div class="card"><h3 style="margin-top:0">Teach it with your own crafts</h3><p class="note" style="margin:0 0 8px">Pick .craft files of rockets that really did the job in KSP (rockets are in the game folder under <b>saves/&lt;your save&gt;/Ships/VAB</b>, planes under <b>Ships/SPH</b>; copy them to the phone first). Say which mission each one completed and the network learns from it, with extra weight because it flew.</p>
   <input type="file" id="craftIn" multiple accept="*/*" style="width:100%">
   <details style="margin-top:6px"><summary class="note">…or paste a craft file's text</summary><textarea id="craftTxt" rows="4" style="width:100%;margin-top:6px" placeholder="ship = My Rocket&#10;version = 1.12.5&#10;PART&#10;{ …"></textarea><button class="btn small" data-craftpaste style="margin-top:6px">Read it</button></details>
   <div id="craftList">${craftListHtml()}</div></div>
@@ -3780,7 +3834,7 @@ function renderTrain() {
 const MISN = { flyby: 'Flyby', orbit: 'Orbit', land: 'Land', landReturn: 'Land and come back', orbitReturn: 'Orbit and come back' };
 function craftListHtml() {
   const L = TR.crafts || []; if (!L.length) return '';
-  return L.map((c, i) => { if (c.error) return `<div class="verdict bad" style="margin-top:8px"><b>${esc(c.file)}</b>${esc(c.error)}${c.unknown && c.unknown.length ? ` Parts it doesn't know: ${esc(c.unknown.slice(0, 6).join(', '))}.` : ''}</div>`;
+  return L.map((c, i) => { if (!c.error && c.plane) return planeCraftHtml(c, i); if (c.error) return `<div class="verdict bad" style="margin-top:8px"><b>${esc(c.file)}</b>${esc(c.error)}${c.unknown && c.unknown.length ? ` Parts it doesn't know: ${esc(c.unknown.slice(0, 6).join(', '))}.` : ''}</div>`;
     const g = c.g, desc = g.stages.map((s, k) => `${s.n > 1 ? s.n + '× ' : ''}${BY[s.eng] ? BY[s.eng].t.replace(/ Liquid Fuel Engine| Solid Fuel Booster/, '') : '?'} + ${s.tanks.length} tank${s.tanks.length === 1 ? '' : 's'}`).join(' / ') + (g.rings || []).map(r => ` · ${r.k}× ${BY[r.unit].t.replace(/ Solid Fuel Booster| Liquid Fuel Engine/, '')} boosters`).join('');
     const [b, m] = c.goal.split(':');
     return `<div class="card" style="background:var(--panel2);margin:8px 0 0"><b>${esc(c.name)}</b> <span class="note">${esc(c.file)}</span><p class="note" style="margin:4px 0">${esc(BY[g.cmd].t)} · ${esc(desc)}${c.unknown.length ? `<br>Not counted (parts this app doesn't model): ${esc(c.unknown.slice(0, 8).join(', '))}${c.unknown.length > 8 ? '…' : ''}` : ''}${c.notes.length ? `<br>${esc(c.notes[0])}` : ''}</p>
@@ -3788,10 +3842,20 @@ function craftListHtml() {
       ${c.check ? `<p class="note" style="margin:6px 0 0">The app's model gives it ${c.check.ok ? `<b>${fmt(c.check.margin)} m/s to spare</b>` : c.check.margin < 0 ? `<b>${fmt(-c.check.margin)} m/s short</b> (if it really made it, the network still learns from it; a flight report in a mission corrects the model)` : 'a failed check: ' + esc((c.check.stab || [])[0] || '')} for this mission.</p>` : ''}
       <button class="btn small ${c.taught ? '' : 'primary'}" data-cteach="${i}" style="margin-top:6px" ${c.taught ? 'disabled' : ''}>${c.taught ? 'Learned ✓' : 'It did this mission: learn from it'}</button></div>`; }).join('');
 }
+const PLM = { 'Kerbin:orbit': 'Spaceplane to low Kerbin orbit', 'air:flyby': 'Aircraft: flying somewhere (and back)', 'air:ferry': 'Aircraft: carrying cargo', 'air:speed': 'Aircraft: going fast' };
+function planeCraftHtml(c, i) {
+  const d = c.d, w = d.wings.map(([id, n]) => `${n}× ${BY[id].t}`).join(', ');
+  return `<div class="card" style="background:var(--panel2);margin:8px 0 0"><b>${esc(c.name)}</b> <span class="note">${esc(c.file)} · plane</span><p class="note" style="margin:4px 0">${esc(BY[d.cmd].t)} · ${d.tanks.length} fuselage tank${d.tanks.length === 1 ? '' : 's'} · ${d.jet.n ? `${d.jet.n}× ${esc(BY[d.jet.id].t)}` : ''}${d.rocket ? ` · ${d.rocket.n}× ${esc(BY[d.rocket.id].t)}` : ''} · ${esc(w)}${d.gear ? ` · ${d.gear.n}× ${esc(BY[d.gear.id].t)}` : ''}${c.unknown.length ? `<br>Not counted: ${esc(c.unknown.slice(0, 8).join(', '))}` : ''}${c.notes.length ? `<br>${esc(c.notes[0])}` : ''}</p>
+    <select data-cplane="${i}" style="width:100%">${Object.entries(PLM).map(([k, t]) => `<option value="${k}"${k === c.goal ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    <p class="note" style="margin:6px 0 0">Planes go into the plane design memory: later spaceplane and aircraft searches start from them. (The network learns rockets.)</p>
+    <button class="btn small ${c.taught ? '' : 'primary'}" data-cteach="${i}" style="margin-top:6px" ${c.taught ? 'disabled' : ''}>${c.taught ? 'Saved ✓' : 'It did this: remember it'}</button></div>`;
+}
 function craftCheck(c) { try { const inv = inventory(); for (const [id, n] of Object.entries(O.partsUsed(c.g))) inv[id] = Math.max(inv[id] || 0, n); c.inv = inv; c.check = O.evaluate(c.g, c.goal, inv, false, Object.assign({}, limits('rocket'), { objective: 'balance' })); } catch (e) { c.check = null; } }
 function addCraft(file, text) {
-  const R = CRAFT.toDesign(text), c = Object.assign({ file }, R);
-  if (!R.error) { const legs = Object.keys(R.g.fix).some(id => BY[id].leg), chute = Object.keys(R.g.fix).some(id => BY[id].chute); c.goal = legs ? (chute ? 'Mun:landReturn' : 'Mun:land') : chute ? 'Mun:orbitReturn' : 'Mun:orbit'; craftCheck(c); }
+  const meta = CRAFT.parse(text).meta, sph = /SPH/i.test(meta.type || '') || /\bSPH\b/.test(file);
+  const R = sph ? CRAFT.toPlane(text) : CRAFT.toDesign(text), c = Object.assign({ file }, R);
+  if (!R.error && R.plane) c.goal = R.d.rocket || !R.d.jet.n ? 'Kerbin:orbit' : 'air:flyby';
+  else if (!R.error) { const legs = Object.keys(R.g.fix).some(id => BY[id].leg), chute = Object.keys(R.g.fix).some(id => BY[id].chute); c.goal = legs ? (chute ? 'Mun:landReturn' : 'Mun:land') : chute ? 'Mun:orbitReturn' : 'Mun:orbit'; craftCheck(c); }
   (TR.crafts = TR.crafts || []).push(c); const el = $('craftList'); if (el) el.innerHTML = craftListHtml();
 }
 function trainClick(e) {
@@ -3800,12 +3864,14 @@ function trainClick(e) {
   if (e.target.closest('[data-trstart]')) practice(+$('trN').value, $('trB').checked);
   if (e.target.closest('[data-craftpaste]')) { const t = $('craftTxt').value; if (t.trim()) { addCraft('pasted', t); $('craftTxt').value = ''; } return; }
   const ct = e.target.closest('[data-cteach]'); if (ct) { const c = TR.crafts[+ct.dataset.cteach]; if (!c || c.taught) return;
+    if (c.plane) { rememberPlane(c.goal, c.crew, c.d, true); c.taught = true; $('craftList').innerHTML = craftListHtml(); $('trNote').textContent = `Saved ${c.name}: your next ${c.goal.startsWith('air') ? 'aircraft' : 'spaceplane'} searches will start from it.`; return; }
     for (let k = 0; k < 3; k++) addSample(c.inv || inventory(), c.goal, c.crew, limits('rocket'), c.g); // it flew: three times the weight of a practice answer
     remember(c.goal, c.crew, [c.g]); c.taught = true; $('craftList').innerHTML = craftListHtml(); $('trNote').textContent = 'Learning from your craft…';
     trainNet(nnSamples.slice(-400), 4).then(q => { $('trNote').textContent = q ? `Learned from ${c.name}. On the examples it has seen, its first guess now matches ${Math.round(q.score * 100)}% of the big choices.` : 'Saved.'; }); }
 }
 function trainChange(e) {
   if (e.target.id === 'craftIn') { for (const f of e.target.files || []) { const rd = new FileReader(); rd.onload = () => addCraft(f.name, String(rd.result)); rd.readAsText(f); } e.target.value = ''; return; }
+  const cp = e.target.closest('[data-cplane]'); if (cp) { TR.crafts[+cp.dataset.cplane].goal = cp.value; return; }
   const cb = e.target.closest('[data-cbody],[data-cmis]'); if (cb) { const i = +(cb.dataset.cbody || cb.dataset.cmis), c = TR.crafts[i]; const b = document.querySelector(`[data-cbody="${i}"]`).value; let m = document.querySelector(`[data-cmis="${i}"]`).value; if (b === 'Kerbin') m = 'orbit'; c.goal = b + ':' + m; craftCheck(c); $('craftList').innerHTML = craftListHtml(); }
 }
 async function practice(n, ownLim) {
