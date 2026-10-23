@@ -1,8 +1,8 @@
 {
-  "web": 54,
+  "web": 55,
   "apk": 4,
-  "sha256": "18a2b2ed6357c7afbea9131367e1bab893ebf9982807e1c68b91e30324acdc83",
-  "notes": "Learns locally: design memory seeds new searches, 'Why this rocket' explains choices, flight reports correct future designs; nothing leaves the phone",
+  "sha256": "98fca9ec8ba34da4be66941c80f4d51657c8f40ce45829fdb0efc74cce53faf7",
+  "notes": "Design network on the phone (trained on 1,475 rockets, works offline), train it yourself in Career, 'How it thought' pictures, live thinking view while designing; planes: real wing shapes, tricycle gear, body long enough for its wings",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2
