@@ -1118,7 +1118,8 @@ function seedStages(g, goal, C, inv, variant) {
     const engs = C.engs.filter(id => !BY[id].srb && BY[id].d !== 'r' && avail(id) > 0 && sz(BY[id].d) >= wMin - 1e-6 && (grp.launch ? BY[id].ia / BY[id].iv >= 0.75 : true)).sort((a, b) => (grp.launch ? BY[b].ta - BY[a].ta : BY[b].iv - BY[a].iv) || BY[a].m - BY[b].m);
     if (!engs.length) return null;
     let best = null;
-    for (const e of engs.slice(variant % 2, (variant % 2) + 3)) {
+    const off = engs.length > 3 ? variant % (engs.length - 2) : variant % Math.max(1, engs.length);
+    for (const e of engs.slice(off, off + 3)) {
       const E = BY[e], tanks = C.tanks.filter(t => BY[t].d === E.d && (E.fuel === 'LF' ? !(BY[t].ox > 0) : BY[t].ox > 0)).sort((a, b) => BY[b].m - BY[a].m);
       if (!tanks.length) continue;
       // the lightest stack of one tank type (up to 6) that gives the Δv; if none does, the biggest that fits
@@ -1180,7 +1181,7 @@ function optimize(inv, goal, opts = {}) {
     let g = { cmd: goalInfo(goal).ret ? (lightCmd.find(id => !BY[id].probe && !BY[id].plane) || lightCmd[0]) : lightCmd[rs % lightCmd.length], fix: Object.assign({}, fix), stages: [], boost: null };
     // seed: biggest engine with as many tanks of its size as fit
     const e0 = C.engs.slice().sort((a, b) => BY[b].tv - BY[a].tv)[rs % C.engs.length];
-    const built = rs % 2 === 0 ? seedStages(g, goal, C, inv, rs >> 1) : null; // sized stage by stage with the rocket equation, the way a player would
+    const built = rs % 2 === 0 ? seedStages(g, goal, C, inv, (rs >> 1) + (opts.variantBase || 0)) : null; // each worker starts from a different seed shape // sized stage by stage with the rocket equation, the way a player would
     if (built) g.stages = built.stages, g.rings = built.rings;
     else if (goal.split(':')[0] !== 'Kerbin' && vacE.length && slE.length && C.decs.length) { // the usual shape: a sea-level lifter under a vacuum upper stage
       const up = vacE.sort((a, b) => BY[a].m - BY[b].m)[rs % vacE.length], lo = slE.slice().sort((a, b) => BY[b].ta - BY[a].ta)[rs % slE.length], tu = tankFor0(up), tl = tankFor0(lo);
@@ -1205,7 +1206,8 @@ function optimize(inv, goal, opts = {}) {
       const cand = fixDecs(tidy(mutate(curG, inv, C, r)), inv, C);
       if (!fits(cand, inv)) continue;
       const e = evalM(cand); it++; tested++;
-      if (e.ok) for (const ob of ALT_OBJ) { if (e.margin < Math.max(150, e.need * (ob === 'balance' ? 0.10 : 0.05))) continue; const sc = objScore(ob, e); if (!alts[ob] || sc > alts[ob].s) alts[ob] = { s: sc, g: clone(cand) }; } // best seen for each kind of "best" if (opts.tick && tested % 2000 === 0) opts.tick(tested);
+      if (e.ok) for (const ob of ALT_OBJ) { if (e.margin < Math.max(150, e.need * (ob === 'balance' ? 0.10 : 0.05))) continue; const sc = objScore(ob, e); if (!alts[ob] || sc > alts[ob].s) alts[ob] = { s: sc, g: clone(cand) }; } // best seen for each kind of "best"
+      if (opts.tick && tested % 2000 === 0) opts.tick(tested);
       if (e.score >= cur.score || r() < Math.exp((e.score - cur.score) / T)) { cur = e; curG = cand; }
       if (!best || cur.score > best.e.score) best = { g: clone(curG), e: cur };
     }
@@ -2889,7 +2891,9 @@ function runJob(w, msg, onTick) {
 }
 async function runPool(inv, goal, opts, target, onTick, kind = 'rocket') {
   const P = getPool(), W = P.length ? P : [null], per = Math.ceil(target / W.length), counts = W.map(() => 0);
-  const rs = await Promise.all(W.map((w, i) => runJob(w, { kind, inv, goal, opts: Object.assign({}, opts, { restarts: opts.restarts || 2, iters: Math.ceil(per / (opts.restarts || 2)), minTests: per, seed: 1000 + i * 100003 }) }, t => { counts[i] = t; onTick(counts.reduce((a, b) => a + b, 0)); })));
+  // many short restarts beat a few long ones: a search that starts from a poor shape (say one stage) rarely climbs out of it
+  const nR = opts.restarts || (kind === 'rocket' ? Math.max(2, Math.min(16, Math.round(per / 6000))) : 2);
+  const rs = await Promise.all(W.map((w, i) => runJob(w, { kind, inv, goal, opts: Object.assign({}, opts, { restarts: nR, iters: Math.ceil(per / nR), minTests: per, seed: 1000 + i * 100003, variantBase: i * nR }) }, t => { counts[i] = t; onTick(counts.reduce((a, b) => a + b, 0)); })));
   const good = rs.filter(x => x && !x.error);
   if (!good.length) return rs[0] || { error: 'Search failed.' };
   const best = good.reduce((a, b) => b.r.score > a.r.score ? b : a);
@@ -2919,11 +2923,13 @@ async function designRocket() {
   if (!good.some(o => o.R.r.ok)) {
     $('runNote').textContent = 'No design made it. Checking what is holding it back…';
     const U = await runPool(inv, goal, { limits: Object.assign({}, d.cargo ? { cargo: d.cargo } : {}), objective: 'balance', crewed: crew }, 60000, () => {});
-    if (!U.error && U.r.ok) {
-      const L = limits('rocket'), why = [];
-      if (L.mass != null && U.r.mass > L.mass) why.push(`about ${fmt(U.r.mass)} t (your Launch Pad takes ${fmt(L.mass)} t)`);
-      if (L.parts != null && U.r.parts > L.parts) why.push(`${U.r.parts} parts (your VAB takes ${L.parts})`);
-      hint = `With your researched parts this needs ${why.join(' and ') || 'a bigger rocket than your buildings allow'}. Upgrade ${why.length && why[0].includes('Pad') ? 'the Launch Pad' : 'your buildings'} in Career, or research bigger tanks and better engines.`;
+    // the free search may find a design that fits your buildings after all: re-check it against them and use it if it passes
+    const fitR = !U.error && U.r.ok ? O.evaluate(U.g, goal, inv, false, Object.assign({}, lim, { objective: 'balance' })) : null;
+    if (fitR && fitR.ok) { for (const o of good) o.R = Object.assign({}, o.R, { g: U.g, r: fitR }); }
+    else if (!U.error && U.r.ok) {
+      const W = { parts: ['parts', 'VAB', ''], mass: ['t', 'Launch Pad', ' t'], height: ['m tall', 'Launch Pad', ' m'], width: ['m wide', 'Launch Pad', ' m'] };
+      const why = (fitR && fitR.lims || []).map(l => l.what === 'parts' ? `${l.have} parts (your VAB takes ${l.max})` : `about ${fmt(l.have, 1)} ${W[l.what][0]} (your ${W[l.what][1]} takes ${fmt(l.max)}${W[l.what][2]})`);
+      hint = why.length ? `With your researched parts this needs ${why.join(' and ')}. Upgrade ${why.some(w => w.includes('VAB')) ? 'the Vehicle Assembly Building' : 'the Launch Pad'} in Career, or research bigger tanks and better engines so it takes fewer parts.` : 'No design passed every check this time, though one fits your buildings on paper. Try designing again; if it keeps failing, research bigger tanks or better engines.';
     } else hint = 'Your researched parts can\'t do this trip yet. Research bigger fuel tanks and more efficient engines (for example Fuel Systems, Heavy Rocketry), or pick a closer goal.';
   }
   const m = { id: 'm' + Date.now(), kind: 'rocket', hint, created: Date.now(), goal, crewed: crew, cargo: d.cargo || 0, date: Object.assign({}, st.date), lim, opts: good.map(o => ({ ob: o.ob, g: o.R.g })), pick: 0, done: {}, tested: done };
