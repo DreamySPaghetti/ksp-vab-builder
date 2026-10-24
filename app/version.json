@@ -1,8 +1,8 @@
 {
-  "web": 57,
+  "web": 58,
   "apk": 4,
-  "sha256": "edf52ad1bb95841428c4868df7acd32db542c3c2051c3c25a67e251692324c53",
-  "notes": "Import Spaceplane Hangar (SPH) craft files too: planes you flew start later spaceplane and aircraft searches; plane designs that work are remembered",
+  "sha256": "a133d4d57441c27cd99356496a620423ae9626308b7ba8a975e3e49d5889890a",
+  "notes": "One combined network for rockets, spaceplanes, aircraft, shuttles and station launches (trained on 5,051 craft); practice includes planes and shuttles; choose the number of stages and whether to use strap-on boosters",
   "apkUrl": "https://raw.githubusercontent.com/DreamySPaghetti/ksp-vab-builder/main/app/VAB-Builder.apk",
   "apkNotes": "New app icon: a 4K rocket",
   "minApk": 2
